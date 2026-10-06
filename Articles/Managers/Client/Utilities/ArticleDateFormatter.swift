@@ -22,12 +22,6 @@ enum ArticleDateFormatter {
         return formatter
     }()
 
-    private static let relative: RelativeDateTimeFormatter = {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .full
-        return formatter
-    }()
-
     static func date(from string: String?) -> Date? {
         guard let string else { return nil }
         return internetDateTime.date(from: string) ?? fractionalDateTime.date(from: string)
@@ -37,9 +31,22 @@ enum ArticleDateFormatter {
         date(from: string).map(display.string(from:))
     }
 
-    /// "5 minutes ago" – used to tell the user how old cached content is.
-    static func relativeString(for date: Date, relativeTo reference: Date = Date()) -> String {
-        guard reference.timeIntervalSince(date) >= 60 else { return "just now" }
-        return relative.localizedString(for: date, relativeTo: reference)
+    /// Compact age as shown on the detail screen ("10h ago").
+    static func shortRelativeString(from string: String?, relativeTo reference: Date = Date()) -> String? {
+        date(from: string).map { shortRelativeString(for: $0, relativeTo: reference) }
+    }
+
+    static func shortRelativeString(for date: Date, relativeTo reference: Date = Date()) -> String {
+        let seconds = max(0, Int(reference.timeIntervalSince(date)))
+        let minute = 60, hour = 3_600, day = 86_400, week = 604_800, year = 31_536_000
+
+        switch seconds {
+        case ..<minute: return "Just now"
+        case ..<hour: return "\(seconds / minute)m ago"
+        case ..<day: return "\(seconds / hour)h ago"
+        case ..<week: return "\(seconds / day)d ago"
+        case ..<year: return "\(seconds / week)w ago"
+        default: return "\(seconds / year)y ago"
+        }
     }
 }

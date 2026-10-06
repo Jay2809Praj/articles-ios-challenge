@@ -1,6 +1,6 @@
 import Alamofire
 import Foundation
-import XCGLogger
+@preconcurrency import XCGLogger
 
 /// Logs the lifecycle of every Alamofire request through XCGLogger.
 ///
