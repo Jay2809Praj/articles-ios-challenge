@@ -1,35 +1,42 @@
 import UIKit
 
-/// Icons used across the app (SF Symbols).
+/// Icons and images exported from the Figma file.
 enum AppIcon {
-    static let grid = symbol("square.grid.2x2.fill")
-    static let list = symbol("rectangle.grid.1x2.fill")
-    static let search = symbol("magnifyingglass")
-    static let calendar = symbol("calendar")
-    static let readMore = symbol("arrow.right.circle.fill")
-    static let back = symbol("chevron.left")
-    static let share = symbol("square.and.arrow.up")
-    static let safari = symbol("safari")
-    static let imagePlaceholder = symbol("photo")
-    static let imageUnavailable = symbol("photo.badge.exclamationmark")
-    static let offline = symbol("wifi.slash")
-    static let online = symbol("wifi")
-    static let warning = symbol("exclamationmark.triangle.fill")
-    static let author = symbol("person.fill")
+    static let grid = image(named: "IconGrid")
+    static let list = image(named: "IconList")
+    static let search = image(named: "IconSearch")
+    static let calendar = image(named: "IconCalendar")
+    static let readMore = image(named: "IconReadMore")
+    static let back = image(named: "IconBack")
+    static let clock = image(named: "IconClock")
+    static let favoriteAdd = image(named: "IconFavoriteAdd")
+    static let favoriteRemove = image(named: "IconFavoriteRemove")
+    static let offline = image(named: "IconOffline")
+    static let retry = image(named: "IconRetry")
+    static let imagePlaceholder = image(named: "ImagePlaceholder")
 
-    /// Symbol names, for the SwiftUI side.
+    /// Asset and SF Symbol names, for the SwiftUI side.
     enum Name {
-        static let offline = "wifi.slash"
+        static let offline = "IconOffline"
+        static let retry = "IconRetry"
         static let error = "exclamationmark.triangle"
         static let empty = "newspaper"
         static let noResults = "magnifyingglass"
         static let selectArticle = "doc.text.magnifyingglass"
-        static let retry = "arrow.clockwise"
     }
 
-    private static func symbol(_ name: String) -> UIImage {
-        guard let image = UIImage(systemName: name) else {
-            assertionFailure("Missing SF Symbol: \(name)")
+    /// SF Symbols for UI the design does not cover (banners, search field).
+    enum Symbol {
+        static let offline = "wifi.slash"
+        static let online = "wifi"
+        static let warning = "exclamationmark.triangle.fill"
+        static let favorite = "heart.fill"
+        static let close = "xmark"
+    }
+
+    private static func image(named name: String) -> UIImage {
+        guard let image = UIImage(named: name) else {
+            assertionFailure("Missing image asset: \(name)")
             return UIImage()
         }
         return image

@@ -1,23 +1,35 @@
 import UIKit
 
-/// Colours from the Figma design, backed by the asset catalogue so each one
-/// can carry a dark-mode variant.
+/// Colours from the Figma file, stored in the asset catalogue.
 enum AppColor {
-    /// Top of the screen gradient (pure white in the design).
-    static let backgroundTop = color(named: "BackgroundTop")
-    /// Screen background behind the cards.
+    /// Screen background of the list – `#FFFFFF`.
     static let background = color(named: "Background")
-    /// Article card surface – `#233D46`.
+    /// Article card and detail header surface – `#233D46`.
     static let card = color(named: "Card")
-    /// Image placeholder surface, one step lighter than the card.
-    static let cardPlaceholder = color(named: "CardPlaceholder")
-    /// "Read More" button – `#195A94`.
+    /// "Read More" button and card glow – `#195A94`.
     static let accent = color(named: "Accent")
+    /// Screen title and header icons – `#000000`.
     static let textPrimary = color(named: "TextPrimary")
+    /// Text on dark surfaces – `#FFFFFF`.
     static let textOnCard = color(named: "TextOnCard")
-    /// Dates and other de-emphasised text on a card – `#919EA2`.
+    /// Date on a card – `#969696`.
     static let textMuted = color(named: "TextMuted")
-    static let textSecondary = color(named: "TextSecondary")
+    /// Detail screen background – `#F3F3F3`.
+    static let detailBackground = color(named: "DetailBackground")
+    /// Detail body copy – `#8C8E98`.
+    static let detailBody = color(named: "DetailBody")
+    /// Detail timestamp – `#A7AEC1`.
+    static let detailMeta = color(named: "DetailMeta")
+    /// Full-screen state background – `#DAD9D9`.
+    static let offlineBackground = color(named: "OfflineBackground")
+    /// State illustration – `#222222`.
+    static let offlineIcon = color(named: "OfflineIcon")
+    /// State message – black at 60 %.
+    static let offlineMessage = color(named: "OfflineMessage")
+    /// "Retry" pill – `#ECECEC`.
+    static let retryBackground = color(named: "RetryBackground")
+    /// Surface behind the image placeholder – `#F8F8F8`.
+    static let placeholderBackground = color(named: "PlaceholderBackground")
 
     private static func color(named name: String) -> UIColor {
         guard let color = UIColor(named: name) else {

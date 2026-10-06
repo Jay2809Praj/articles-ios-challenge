@@ -1,29 +1,35 @@
 import CoreGraphics
 
-/// Spacing and sizing taken from the Figma design (375 pt wide frame).
+/// Spacing and sizing from the Figma file (393 pt wide frame).
 enum AppMetrics {
     enum List {
         /// Distance from the screen edge to a card.
         static let horizontalInset: CGFloat = 8
-        /// Vertical gap between two cards.
+        /// Vertical gap between two cards in the list layout.
         static let cardSpacing: CGFloat = 16
-        static let topInset: CGFloat = 4
+        /// Gaps between cards in the grid layout.
+        static let gridColumnSpacing: CGFloat = 9
+        static let gridRowSpacing: CGFloat = 8
         static let bottomInset: CGFloat = 24
-        /// Widest a single card is allowed to grow before a second column is added.
-        static let maximumCardWidth: CGFloat = 520
-        static let estimatedCardHeight: CGFloat = 321
-        static let estimatedGridCardHeight: CGFloat = 220
+        /// A list card is 377 pt wide in the design; wider containers get more columns.
+        static let preferredCardWidth: CGFloat = 377
+        static let preferredGridCardWidth: CGFloat = 184
+        static let estimatedCardHeight: CGFloat = 337
+        static let estimatedGridCardHeight: CGFloat = 170
     }
 
     enum Card {
-        static let cornerRadius: CGFloat = 6
-        static let imageCornerRadius: CGFloat = 4
-        static let buttonCornerRadius: CGFloat = 6
-        static let selectionBorderWidth: CGFloat = 2
+        static let cornerRadius: CGFloat = 8
+        static let imageCornerRadius: CGFloat = 8
+        /// Glow around a card: 0 / 0 / 30, accent at 15 %.
+        static let shadowRadius: CGFloat = 15
+        static let shadowOpacity: Float = 0.15
+        static let buttonCornerRadius: CGFloat = 8
     }
 
     enum Detail {
-        static let sheetCornerRadius: CGFloat = 24
-        static let maximumContentWidth: CGFloat = 720
+        static let imageCornerRadius: CGFloat = 12
+        /// The readable column never grows beyond this on iPad.
+        static let maximumContentWidth: CGFloat = 640
     }
 }

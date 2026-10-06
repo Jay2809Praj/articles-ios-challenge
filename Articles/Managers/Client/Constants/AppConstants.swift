@@ -13,6 +13,10 @@ enum AppConstants {
         static let articlesKey = "articles.latest"
     }
 
+    enum Favorites {
+        static let storageKey = "favorites.identifiers"
+    }
+
     enum Storyboard {
         static let articleList = "ArticleList"
         static let articleDetail = "ArticleDetail"
