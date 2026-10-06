@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="23504" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
+    <device id="retina6_12" orientation="portrait" appearance="light"/>
+    <dependencies>
+        <deployment identifier="iOS"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="23506"/>
+        <capability name="Named colors" minToolsVersion="9.0"/>
+        <capability name="Safe area layout guides" minToolsVersion="9.0"/>
+        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
+    </dependencies>
+    <scenes>
+        <!--Article Detail-->
+        <scene sceneID="ads-sc-001">
+            <objects>
+                <viewController storyboardIdentifier="ArticleDetailViewController" id="ads-vc-001" customClass="ArticleDetailViewController" customModule="Articles" customModuleProvider="target" sceneMemberID="viewController">
+                    <view key="view" contentMode="scaleToFill" id="ads-vw-001">
+                        <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
+                        <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+                        <subviews>
+                            <scrollView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" alwaysBounceVertical="YES" contentInsetAdjustmentBehavior="never" translatesAutoresizingMaskIntoConstraints="NO" id="ads-sv-001">
+                                <rect key="frame" x="0.0" y="159" width="393" height="693"/>
+                                <subviews>
+                                    <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="ads-cv-001" userLabel="Content View">
+                                        <rect key="frame" x="0.0" y="0.0" width="393" height="700"/>
+                                        <subviews>
+                                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="ads-hb-001" userLabel="Header Background">
+                                                <rect key="frame" x="0.0" y="-800" width="393" height="1022"/>
+                                                <color key="backgroundColor" name="Card"/>
+                                            </view>
+                                            <stackView opaque="NO" contentMode="scaleToFill" axis="vertical" spacing="24" translatesAutoresizingMaskIntoConstraints="NO" id="ads-cs-001" userLabel="Content Stack">
+                                                <rect key="frame" x="24" y="0.0" width="345" height="668"/>
+                                                <subviews>
+                                                    <stackView opaque="NO" contentMode="scaleToFill" axis="vertical" alignment="leading" spacing="12" translatesAutoresizingMaskIntoConstraints="NO" id="ads-tb-001" userLabel="Title Block">
+                                                        <rect key="frame" x="0.0" y="0.0" width="345" height="99"/>
+                                                        <subviews>
+                                                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" verticalCompressionResistancePriority="751" text="Title" textAlignment="natural" lineBreakMode="tailTruncation" numberOfLines="0" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="ads-tl-001">
+                                                                <rect key="frame" x="10" y="0.0" width="325" height="62"/>
+                                                                <fontDescription key="fontDescription" type="boldSystem" pointSize="24"/>
+                                                                <nil key="textColor"/>
+                                                                <nil key="highlightedColor"/>
+                                                            </label>
+                                                            <stackView opaque="NO" contentMode="scaleToFill" alignment="center" spacing="4" translatesAutoresizingMaskIntoConstraints="NO" id="ads-ms-001" userLabel="Meta Stack">
+                                                                <rect key="frame" x="10" y="74" width="80" height="25"/>
+                                                                <subviews>
+                                                                    <imageView userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="252" verticalHuggingPriority="251" horizontalCompressionResistancePriority="752" translatesAutoresizingMaskIntoConstraints="NO" id="ads-ci-001" userLabel="Clock">
+                                                                        <rect key="frame" x="0.0" y="0.0" width="26" height="25"/>
+                                                                        <constraints>
+                                                                            <constraint firstAttribute="width" constant="26" id="ads-c1-001"/>
+                                                                            <constraint firstAttribute="height" constant="25" id="ads-c2-001"/>
+                                                                        </constraints>
+                                                                    </imageView>
+                                                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Meta" textAlignment="natural" lineBreakMode="tailTruncation" numberOfLines="0" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="ads-ml-001">
+                                                                        <rect key="frame" x="30" y="0.0" width="50" height="25"/>
+                                                                        <fontDescription key="fontDescription" type="system" weight="light" pointSize="14"/>
+                                                                        <nil key="textColor"/>
+                                                                        <nil key="highlightedColor"/>
+                                                                    </label>
+                                                                </subviews>
+                                                            </stackView>
+                                                        </subviews>
+                                                    </stackView>
+                                                    <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="ads-iw-001" userLabel="Image Wrapper">
+                                                        <rect key="frame" x="0.0" y="123" width="345" height="179"/>
+                                                        <subviews>
+                                                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="ads-is-001" userLabel="Image Shadow">
+                                                                <rect key="frame" x="11" y="0.0" width="323" height="179"/>
+                                                                <subviews>
+                                                                    <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="ads-im-001" customClass="RemoteImageView" customModule="Articles" customModuleProvider="target">
+                                                                        <rect key="frame" x="0.0" y="0.0" width="323" height="179"/>
+                                                                    </imageView>
+                                                                </subviews>
+                                                                <color key="backgroundColor" white="0.0" alpha="0.0" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                                                <constraints>
+                                                                    <constraint firstItem="ads-im-001" firstAttribute="top" secondItem="ads-is-001" secondAttribute="top" id="ads-c3-001"/>
+                                                                    <constraint firstItem="ads-im-001" firstAttribute="leading" secondItem="ads-is-001" secondAttribute="leading" id="ads-c4-001"/>
+                                                                    <constraint firstAttribute="trailing" secondItem="ads-im-001" secondAttribute="trailing" id="ads-c5-001"/>
+                                                                    <constraint firstAttribute="bottom" secondItem="ads-im-001" secondAttribute="bottom" id="ads-c6-001"/>
+                                                                    <constraint firstAttribute="width" secondItem="ads-is-001" secondAttribute="height" multiplier="323:179" id="ads-c7-001"/>
+                                                                </constraints>
+                                                            </view>
+                                                        </subviews>
+                                                        <color key="backgroundColor" white="0.0" alpha="0.0" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                                        <constraints>
+                                                            <constraint firstItem="ads-is-001" firstAttribute="top" secondItem="ads-iw-001" secondAttribute="top" id="ads-c8-001"/>
+                                                            <constraint firstItem="ads-is-001" firstAttribute="leading" secondItem="ads-iw-001" secondAttribute="leading" constant="11" id="ads-c9-001"/>
+                                                            <constraint firstAttribute="trailing" secondItem="ads-is-001" secondAttribute="trailing" constant="11" id="ads-ca-001"/>
+                                                            <constraint firstAttribute="bottom" secondItem="ads-is-001" secondAttribute="bottom" id="ads-cb-001"/>
+                                                        </constraints>
+                                                    </view>
+                                                    <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="ads-bw-001" userLabel="Body Wrapper">
+                                                        <rect key="frame" x="0.0" y="326" width="345" height="342"/>
+                                                        <subviews>
+                                                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Body" textAlignment="natural" lineBreakMode="wordWrap" numberOfLines="0" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="ads-bl-001">
+                                                                <rect key="frame" x="10" y="0.0" width="325" height="342"/>
+                                                                <fontDescription key="fontDescription" type="system" pointSize="16"/>
+                                                                <nil key="textColor"/>
+                                                                <nil key="highlightedColor"/>
+                                                            </label>
+                                                        </subviews>
+                                                        <color key="backgroundColor" white="0.0" alpha="0.0" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                                        <constraints>
+                                                            <constraint firstItem="ads-bl-001" firstAttribute="top" secondItem="ads-bw-001" secondAttribute="top" id="ads-cc-001"/>
+                                                            <constraint firstItem="ads-bl-001" firstAttribute="leading" secondItem="ads-bw-001" secondAttribute="leading" constant="10" id="ads-cd-001"/>
+                                                            <constraint firstAttribute="trailing" secondItem="ads-bl-001" secondAttribute="trailing" constant="10" id="ads-ce-001"/>
+                                                            <constraint firstAttribute="bottom" secondItem="ads-bl-001" secondAttribute="bottom" id="ads-cf-001"/>
+                                                        </constraints>
+                                                    </view>
+                                                </subviews>
+                                            </stackView>
+                                        </subviews>
+                                        <color key="backgroundColor" white="0.0" alpha="0.0" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                        <constraints>
+                                            <constraint firstItem="ads-hb-001" firstAttribute="top" secondItem="ads-cv-001" secondAttribute="top" constant="-800" id="ads-cg-001"/>
+                                            <constraint firstItem="ads-hb-001" firstAttribute="leading" secondItem="ads-cv-001" secondAttribute="leading" id="ads-ch-001"/>
+                                            <constraint firstAttribute="trailing" secondItem="ads-hb-001" secondAttribute="trailing" id="ads-ci-002"/>
+                                            <constraint firstItem="ads-hb-001" firstAttribute="bottom" secondItem="ads-is-001" secondAttribute="centerY" constant="9.5" id="ads-cj-001"/>
+                                            <constraint firstItem="ads-cs-001" firstAttribute="top" secondItem="ads-cv-001" secondAttribute="top" id="ads-ck-001"/>
+                                            <constraint firstItem="ads-cs-001" firstAttribute="centerX" secondItem="ads-cv-001" secondAttribute="centerX" id="ads-cl-001"/>
+                                            <constraint firstItem="ads-cs-001" firstAttribute="leading" relation="greaterThanOrEqual" secondItem="ads-cv-001" secondAttribute="leading" constant="24" id="ads-cm-001"/>
+                                            <constraint firstItem="ads-cs-001" firstAttribute="width" secondItem="ads-cv-001" secondAttribute="width" constant="-48" priority="750" id="ads-cn-001"/>
+                                            <constraint firstItem="ads-cs-001" firstAttribute="width" relation="lessThanOrEqual" constant="640" id="ads-co-001"/>
+                                            <constraint firstAttribute="bottom" secondItem="ads-cs-001" secondAttribute="bottom" constant="32" id="ads-cp-001"/>
+                                        </constraints>
+                                    </view>
+                                </subviews>
+                                <constraints>
+                                    <constraint firstItem="ads-cv-001" firstAttribute="top" secondItem="ads-clg-01" secondAttribute="top" id="ads-cq-001"/>
+                                    <constraint firstItem="ads-cv-001" firstAttribute="leading" secondItem="ads-clg-01" secondAttribute="leading" id="ads-cr-001"/>
+                                    <constraint firstItem="ads-cv-001" firstAttribute="trailing" secondItem="ads-clg-01" secondAttribute="trailing" id="ads-cs-002"/>
+                                    <constraint firstItem="ads-cv-001" firstAttribute="bottom" secondItem="ads-clg-01" secondAttribute="bottom" id="ads-ct-001"/>
+                                    <constraint firstItem="ads-cv-001" firstAttribute="width" secondItem="ads-flg-01" secondAttribute="width" id="ads-cu-001"/>
+                                </constraints>
+                                <viewLayoutGuide key="contentLayoutGuide" id="ads-clg-01"/>
+                                <viewLayoutGuide key="frameLayoutGuide" id="ads-flg-01"/>
+                            </scrollView>
+                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="ads-tp-001" userLabel="Top Bar">
+                                <rect key="frame" x="0.0" y="0.0" width="393" height="159"/>
+                                <subviews>
+                                    <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="ads-bb-001" userLabel="Back Button">
+                                        <rect key="frame" x="24" y="96" width="46" height="46"/>
+                                        <constraints>
+                                            <constraint firstAttribute="width" constant="46" id="ads-cv-002"/>
+                                            <constraint firstAttribute="height" constant="46" id="ads-cw-001"/>
+                                        </constraints>
+                                        <connections>
+                                            <action selector="backTapped" destination="ads-vc-001" eventType="touchUpInside" id="ads-a1-001"/>
+                                        </connections>
+                                    </button>
+                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Article" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="ads-nt-001" userLabel="Navigation Title">
+                                        <rect key="frame" x="166" y="106" width="61" height="26"/>
+                                        <fontDescription key="fontDescription" type="system" weight="medium" pointSize="20"/>
+                                        <nil key="textColor"/>
+                                        <nil key="highlightedColor"/>
+                                    </label>
+                                    <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="ads-fb-001" userLabel="Favorite Button">
+                                        <rect key="frame" x="327" y="97" width="44" height="44"/>
+                                        <constraints>
+                                            <constraint firstAttribute="width" constant="44" id="ads-cx-001"/>
+                                            <constraint firstAttribute="height" constant="44" id="ads-cy-001"/>
+                                        </constraints>
+                                        <connections>
+                                            <action selector="favoriteTapped" destination="ads-vc-001" eventType="touchUpInside" id="ads-a2-001"/>
+                                        </connections>
+                                    </button>
+                                </subviews>
+                                <color key="backgroundColor" name="Card"/>
+                                <constraints>
+                                    <constraint firstItem="ads-bb-001" firstAttribute="leading" secondItem="ads-tp-001" secondAttribute="leading" constant="24" id="ads-cz-001"/>
+                                    <constraint firstAttribute="bottom" secondItem="ads-bb-001" secondAttribute="bottom" constant="17" id="ads-d1-001"/>
+                                    <constraint firstItem="ads-nt-001" firstAttribute="centerX" secondItem="ads-tp-001" secondAttribute="centerX" id="ads-d2-001"/>
+                                    <constraint firstItem="ads-nt-001" firstAttribute="centerY" secondItem="ads-bb-001" secondAttribute="centerY" id="ads-d3-001"/>
+                                    <constraint firstItem="ads-nt-001" firstAttribute="leading" relation="greaterThanOrEqual" secondItem="ads-bb-001" secondAttribute="trailing" constant="10" id="ads-d4-001"/>
+                                    <constraint firstAttribute="trailing" secondItem="ads-fb-001" secondAttribute="trailing" constant="22" id="ads-d5-001"/>
+                                    <constraint firstItem="ads-fb-001" firstAttribute="centerY" secondItem="ads-bb-001" secondAttribute="centerY" id="ads-d6-001"/>
+                                </constraints>
+                            </view>
+                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="ads-rb-001" customClass="ReadMoreButton" customModule="Articles" customModuleProvider="target">
+                                <rect key="frame" x="34" y="752" width="325" height="50"/>
+                                <constraints>
+                                    <constraint firstAttribute="height" relation="greaterThanOrEqual" constant="50" id="ads-d7-001"/>
+                                    <constraint firstAttribute="height" constant="50" priority="250" id="ads-d7-002"/>
+                                    <constraint firstAttribute="width" relation="lessThanOrEqual" constant="400" id="ads-d8-001"/>
+                                </constraints>
+                                <connections>
+                                    <action selector="readFullArticleTapped" destination="ads-vc-001" eventType="touchUpInside" id="ads-a3-001"/>
+                                </connections>
+                            </view>
+                        </subviews>
+                        <viewLayoutGuide key="safeArea" id="ads-sa-001"/>
+                        <color key="backgroundColor" name="DetailBackground"/>
+                        <constraints>
+                            <constraint firstItem="ads-tp-001" firstAttribute="top" secondItem="ads-vw-001" secondAttribute="top" id="ads-d9-001"/>
+                            <constraint firstItem="ads-tp-001" firstAttribute="leading" secondItem="ads-vw-001" secondAttribute="leading" id="ads-da-001"/>
+                            <constraint firstAttribute="trailing" secondItem="ads-tp-001" secondAttribute="trailing" id="ads-db-001"/>
+                            <constraint firstItem="ads-bb-001" firstAttribute="top" secondItem="ads-sa-001" secondAttribute="top" constant="37" id="ads-dc-001"/>
+                            <constraint firstItem="ads-sv-001" firstAttribute="top" secondItem="ads-tp-001" secondAttribute="bottom" id="ads-dd-001"/>
+                            <constraint firstItem="ads-sv-001" firstAttribute="leading" secondItem="ads-vw-001" secondAttribute="leading" id="ads-de-001"/>
+                            <constraint firstAttribute="trailing" secondItem="ads-sv-001" secondAttribute="trailing" id="ads-df-001"/>
+                            <constraint firstAttribute="bottom" secondItem="ads-sv-001" secondAttribute="bottom" id="ads-dg-001"/>
+                            <constraint firstItem="ads-rb-001" firstAttribute="centerX" secondItem="ads-vw-001" secondAttribute="centerX" id="ads-dh-001"/>
+                            <constraint firstItem="ads-rb-001" firstAttribute="leading" secondItem="ads-vw-001" secondAttribute="leading" constant="34" priority="750" id="ads-di-001"/>
+                            <constraint firstItem="ads-sa-001" firstAttribute="bottom" secondItem="ads-rb-001" secondAttribute="bottom" constant="16" id="ads-dj-001"/>
+                        </constraints>
+                    </view>
+                    <connections>
+                        <outlet property="articleImageView" destination="ads-im-001" id="ads-o1-001"/>
+                        <outlet property="backButton" destination="ads-bb-001" id="ads-o2-001"/>
+                        <outlet property="bodyLabel" destination="ads-bl-001" id="ads-o3-001"/>
+                        <outlet property="clockIconView" destination="ads-ci-001" id="ads-o4-001"/>
+                        <outlet property="favoriteButton" destination="ads-fb-001" id="ads-o5-001"/>
+                        <outlet property="imageShadowView" destination="ads-is-001" id="ads-o6-001"/>
+                        <outlet property="metaLabel" destination="ads-ml-001" id="ads-o7-001"/>
+                        <outlet property="metaStack" destination="ads-ms-001" id="ads-o8-001"/>
+                        <outlet property="navigationTitleLabel" destination="ads-nt-001" id="ads-o9-001"/>
+                        <outlet property="readFullArticleButton" destination="ads-rb-001" id="ads-oa-001"/>
+                        <outlet property="scrollView" destination="ads-sv-001" id="ads-ob-001"/>
+                        <outlet property="titleBlock" destination="ads-tb-001" id="ads-oc-001"/>
+                        <outlet property="titleLabel" destination="ads-tl-001" id="ads-od-001"/>
+                    </connections>
+                </viewController>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="ads-fr-001" userLabel="First Responder" customClass="UIResponder" sceneMemberID="firstResponder"/>
+            </objects>
+            <point key="canvasLocation" x="0.0" y="0.0"/>
+        </scene>
+    </scenes>
+    <resources>
+        <namedColor name="Card">
+            <color red="0.13725490196078433" green="0.23921568627450981" blue="0.27450980392156865" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+        </namedColor>
+        <namedColor name="DetailBackground">
+            <color red="0.95294117647058818" green="0.95294117647058818" blue="0.95294117647058818" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+        </namedColor>
+    </resources>
+</document>

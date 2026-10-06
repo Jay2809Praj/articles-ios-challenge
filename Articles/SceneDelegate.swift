@@ -8,10 +8,17 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         willConnectTo session: UISceneSession,
         options connectionOptions: UIScene.ConnectionOptions
     ) {
-        guard let windowScene = scene as? UIWindowScene else { return }
+        guard
+            let windowScene = scene as? UIWindowScene,
+            let appDelegate = UIApplication.shared.delegate as? AppDelegate,
+            let router = appDelegate.container.resolve(AppRouter.self)
+        else {
+            return
+        }
 
         let window = UIWindow(windowScene: windowScene)
-        window.rootViewController = UIViewController()
+        window.tintColor = AppColor.accent
+        window.rootViewController = router.makeRootViewController()
         window.makeKeyAndVisible()
         self.window = window
     }

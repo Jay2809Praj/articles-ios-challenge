@@ -36,6 +36,7 @@ private extension AppDelegate {
         registerClients(in: container)
         registerProviders(in: container)
         registerManagers(in: container)
+        registerPresentation(in: container)
     }
 
     /// Low-level utilities shared by the other layers.
@@ -86,6 +87,24 @@ private extension AppDelegate {
 
         container.register(ConnectivityManagerProtocol.self) { resolver in
             ConnectivityManager(provider: resolver.resolve(ReachabilityProviderProtocol.self)!)
+        }
+        .inObjectScope(.container)
+
+        container.register(FavoritesManagerProtocol.self) { _ in
+            FavoritesManager()
+        }
+        .inObjectScope(.container)
+    }
+
+    /// Routing and view controller creation.
+    static func registerPresentation(in container: Container) {
+        container.register(ViewControllerFactoryProtocol.self) { resolver in
+            ViewControllerFactory(resolver: resolver)
+        }
+        .inObjectScope(.container)
+
+        container.register(AppRouter.self) { resolver in
+            AppRouter(factory: resolver.resolve(ViewControllerFactoryProtocol.self)!)
         }
         .inObjectScope(.container)
     }
