@@ -25,4 +25,16 @@ post_install do |installer|
       config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
     end
   end
+
+  # With Xcode 26, TOOLCHAIN_DIR can resolve to the separately installed Metal
+  # toolchain, which has no Swift libraries, and the linker then warns about a
+  # missing search path. DT_TOOLCHAIN_DIR always points at the Xcode toolchain.
+  installer.aggregate_targets.each do |aggregate_target|
+    aggregate_target.xcconfigs.each_key do |config_name|
+      path = aggregate_target.xcconfig_path(config_name)
+      contents = File.read(path)
+      patched = contents.gsub('${TOOLCHAIN_DIR}/usr/lib/swift', '${DT_TOOLCHAIN_DIR}/usr/lib/swift')
+      File.write(path, patched) unless patched == contents
+    end
+  end
 end
