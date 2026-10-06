@@ -19,6 +19,10 @@ struct ContentStateView: View {
     let kind: Kind
     var onRetry: (() -> Void)?
 
+    // Reading the size keeps the UIFontMetrics-scaled fonts below in step
+    // with the user's Dynamic Type setting.
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     var body: some View {
         ZStack {
             background.ignoresSafeArea()
@@ -38,11 +42,11 @@ struct ContentStateView: View {
                 .accessibilityHidden(true)
 
             Text(title)
-                .font(.custom("Roboto-Bold", size: 18, relativeTo: .headline))
+                .font(Font(AppFont.stateTitle))
                 .foregroundStyle(Color.black)
 
             Text(detail)
-                .font(.custom("Roboto-Light", size: 18, relativeTo: .body))
+                .font(Font(AppFont.stateMessage))
                 .foregroundStyle(Color(uiColor: AppColor.offlineMessage))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -125,6 +129,7 @@ struct ContentStateView: View {
 private struct RetryButton: View {
     let action: () -> Void
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var rotation = 0.0
 
     var body: some View {
@@ -138,7 +143,7 @@ private struct RetryButton: View {
                     .frame(width: 16, height: 18)
                     .rotationEffect(.degrees(rotation))
                 Text("Retry")
-                    .font(.custom("Roboto-Bold", size: 16, relativeTo: .callout))
+                    .font(Font(AppFont.stateButton))
                     .foregroundStyle(Color.black)
             }
             .padding(.horizontal, 6)

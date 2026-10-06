@@ -11,8 +11,6 @@ enum AppIcon {
     static let clock = image(named: "IconClock")
     static let favoriteAdd = image(named: "IconFavoriteAdd")
     static let favoriteRemove = image(named: "IconFavoriteRemove")
-    static let offline = image(named: "IconOffline")
-    static let retry = image(named: "IconRetry")
     static let imagePlaceholder = image(named: "ImagePlaceholder")
 
     /// Asset and SF Symbol names, for the SwiftUI side.
