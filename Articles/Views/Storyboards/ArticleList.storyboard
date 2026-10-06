@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="23504" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
+    <device id="retina6_12" orientation="portrait" appearance="light"/>
+    <dependencies>
+        <deployment identifier="iOS"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="23506"/>
+        <capability name="Named colors" minToolsVersion="9.0"/>
+        <capability name="Safe area layout guides" minToolsVersion="9.0"/>
+        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
+    </dependencies>
+    <scenes>
+        <!--Article List-->
+        <scene sceneID="als-sc-001">
+            <objects>
+                <viewController storyboardIdentifier="ArticleListViewController" id="als-vc-001" customClass="ArticleListViewController" customModule="Articles" customModuleProvider="target" sceneMemberID="viewController">
+                    <view key="view" contentMode="scaleToFill" id="als-vw-001">
+                        <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
+                        <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+                        <subviews>
+                            <collectionView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" alwaysBounceVertical="YES" keyboardDismissMode="onDrag" dataMode="none" translatesAutoresizingMaskIntoConstraints="NO" id="als-cv-001">
+                                <rect key="frame" x="0.0" y="131" width="393" height="721"/>
+                                <color key="backgroundColor" white="0.0" alpha="0.0" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                <collectionViewFlowLayout key="collectionViewLayout" minimumLineSpacing="16" minimumInteritemSpacing="8" id="als-fl-001">
+                                    <size key="itemSize" width="377" height="337"/>
+                                    <size key="headerReferenceSize" width="0.0" height="0.0"/>
+                                    <size key="footerReferenceSize" width="0.0" height="0.0"/>
+                                    <inset key="sectionInset" minX="0.0" minY="0.0" maxX="0.0" maxY="0.0"/>
+                                </collectionViewFlowLayout>
+                            </collectionView>
+                            <view hidden="YES" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="als-st-001" userLabel="State Container">
+                                <rect key="frame" x="0.0" y="131" width="393" height="721"/>
+                                <color key="backgroundColor" white="0.0" alpha="0.0" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                            </view>
+                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="als-hd-001" customClass="ArticleListHeaderView" customModule="Articles" customModuleProvider="target">
+                                <rect key="frame" x="0.0" y="59" width="393" height="72"/>
+                                <color key="backgroundColor" name="Background"/>
+                            </view>
+                        </subviews>
+                        <viewLayoutGuide key="safeArea" id="als-sa-001"/>
+                        <color key="backgroundColor" name="Background"/>
+                        <constraints>
+                            <constraint firstItem="als-hd-001" firstAttribute="top" secondItem="als-sa-001" secondAttribute="top" id="als-c1-001"/>
+                            <constraint firstItem="als-hd-001" firstAttribute="leading" secondItem="als-vw-001" secondAttribute="leading" id="als-c2-001"/>
+                            <constraint firstAttribute="trailing" secondItem="als-hd-001" secondAttribute="trailing" id="als-c3-001"/>
+                            <constraint firstItem="als-cv-001" firstAttribute="top" secondItem="als-hd-001" secondAttribute="bottom" id="als-c4-001"/>
+                            <constraint firstItem="als-cv-001" firstAttribute="leading" secondItem="als-vw-001" secondAttribute="leading" id="als-c5-001"/>
+                            <constraint firstAttribute="trailing" secondItem="als-cv-001" secondAttribute="trailing" id="als-c6-001"/>
+                            <constraint firstAttribute="bottom" secondItem="als-cv-001" secondAttribute="bottom" id="als-c7-001"/>
+                            <constraint firstItem="als-st-001" firstAttribute="top" secondItem="als-hd-001" secondAttribute="bottom" id="als-c8-001"/>
+                            <constraint firstItem="als-st-001" firstAttribute="leading" secondItem="als-vw-001" secondAttribute="leading" id="als-c9-001"/>
+                            <constraint firstAttribute="trailing" secondItem="als-st-001" secondAttribute="trailing" id="als-ca-001"/>
+                            <constraint firstAttribute="bottom" secondItem="als-st-001" secondAttribute="bottom" id="als-cb-001"/>
+                        </constraints>
+                    </view>
+                    <connections>
+                        <outlet property="collectionView" destination="als-cv-001" id="als-o1-001"/>
+                        <outlet property="headerView" destination="als-hd-001" id="als-o2-001"/>
+                        <outlet property="stateContainer" destination="als-st-001" id="als-o3-001"/>
+                    </connections>
+                </viewController>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="als-fr-001" userLabel="First Responder" customClass="UIResponder" sceneMemberID="firstResponder"/>
+            </objects>
+            <point key="canvasLocation" x="0.0" y="0.0"/>
+        </scene>
+    </scenes>
+    <resources>
+        <namedColor name="Background">
+            <color red="1" green="1" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+        </namedColor>
+    </resources>
+</document>

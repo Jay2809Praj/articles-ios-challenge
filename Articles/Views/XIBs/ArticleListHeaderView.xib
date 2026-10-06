@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="23504" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
+    <device id="retina6_12" orientation="portrait" appearance="light"/>
+    <dependencies>
+        <deployment identifier="iOS"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="23506"/>
+        <capability name="Safe area layout guides" minToolsVersion="9.0"/>
+        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
+    </dependencies>
+    <objects>
+        <placeholder placeholderIdentifier="IBFilesOwner" id="-1" userLabel="File's Owner" customClass="ArticleListHeaderView" customModule="Articles" customModuleProvider="target">
+            <connections>
+                <outlet property="cancelButton" destination="alh-cb-001" id="alh-o1-001"/>
+                <outlet property="layoutButton" destination="alh-lb-001" id="alh-o2-001"/>
+                <outlet property="searchButton" destination="alh-sb-001" id="alh-o3-001"/>
+                <outlet property="searchField" destination="alh-sf-001" id="alh-o4-001"/>
+                <outlet property="searchRow" destination="alh-sr-001" id="alh-o5-001"/>
+                <outlet property="titleLabel" destination="alh-tl-001" id="alh-o6-001"/>
+                <outlet property="titleRow" destination="alh-tr-001" id="alh-o7-001"/>
+            </connections>
+        </placeholder>
+        <placeholder placeholderIdentifier="IBFirstResponder" id="-2" customClass="UIResponder"/>
+        <view contentMode="scaleToFill" id="alh-rt-001">
+            <rect key="frame" x="0.0" y="0.0" width="393" height="72"/>
+            <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+            <subviews>
+                <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="alh-tr-001" userLabel="Title Row">
+                    <rect key="frame" x="0.0" y="0.0" width="393" height="72"/>
+                    <subviews>
+                        <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Articles" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="alh-tl-001">
+                            <rect key="frame" x="21" y="21" width="96" height="35"/>
+                            <fontDescription key="fontDescription" type="system" weight="black" pointSize="30"/>
+                            <nil key="textColor"/>
+                            <nil key="highlightedColor"/>
+                        </label>
+                        <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="alh-lb-001" userLabel="Layout Button">
+                            <rect key="frame" x="297" y="18" width="40" height="40"/>
+                            <constraints>
+                                <constraint firstAttribute="width" constant="40" id="alh-c1-001"/>
+                                <constraint firstAttribute="height" constant="40" id="alh-c2-001"/>
+                            </constraints>
+                            <connections>
+                                <action selector="layoutTapped" destination="-1" eventType="touchUpInside" id="alh-a1-001"/>
+                            </connections>
+                        </button>
+                        <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="alh-sb-001" userLabel="Search Button">
+                            <rect key="frame" x="345" y="18" width="40" height="40"/>
+                            <constraints>
+                                <constraint firstAttribute="width" constant="40" id="alh-c3-001"/>
+                                <constraint firstAttribute="height" constant="40" id="alh-c4-001"/>
+                            </constraints>
+                            <connections>
+                                <action selector="searchTapped" destination="-1" eventType="touchUpInside" id="alh-a2-001"/>
+                            </connections>
+                        </button>
+                    </subviews>
+                    <color key="backgroundColor" white="0.0" alpha="0.0" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                    <constraints>
+                        <constraint firstItem="alh-tl-001" firstAttribute="leading" secondItem="alh-tr-001" secondAttribute="leading" constant="21" id="alh-c5-001"/>
+                        <constraint firstItem="alh-tl-001" firstAttribute="centerY" secondItem="alh-sb-001" secondAttribute="centerY" id="alh-c6-001"/>
+                        <constraint firstItem="alh-tl-001" firstAttribute="top" relation="greaterThanOrEqual" secondItem="alh-tr-001" secondAttribute="top" constant="8" id="alh-c7-001"/>
+                        <constraint firstAttribute="bottom" relation="greaterThanOrEqual" secondItem="alh-tl-001" secondAttribute="bottom" constant="8" id="alh-c8-001"/>
+                        <constraint firstItem="alh-lb-001" firstAttribute="leading" relation="greaterThanOrEqual" secondItem="alh-tl-001" secondAttribute="trailing" constant="8" id="alh-c9-001"/>
+                        <constraint firstItem="alh-sb-001" firstAttribute="leading" secondItem="alh-lb-001" secondAttribute="trailing" constant="8" id="alh-ca-001"/>
+                        <constraint firstAttribute="trailing" secondItem="alh-sb-001" secondAttribute="trailing" constant="8" id="alh-cx-001"/>
+                        <constraint firstItem="alh-sb-001" firstAttribute="top" secondItem="alh-tr-001" secondAttribute="top" constant="18" priority="750" id="alh-cc-001"/>
+                        <constraint firstItem="alh-sb-001" firstAttribute="top" relation="greaterThanOrEqual" secondItem="alh-tr-001" secondAttribute="top" constant="18" id="alh-cc-002"/>
+                        <constraint firstAttribute="bottom" secondItem="alh-sb-001" secondAttribute="bottom" constant="14" priority="750" id="alh-cd-001"/>
+                        <constraint firstAttribute="bottom" relation="greaterThanOrEqual" secondItem="alh-sb-001" secondAttribute="bottom" constant="14" id="alh-cd-002"/>
+                        <constraint firstItem="alh-lb-001" firstAttribute="centerY" secondItem="alh-sb-001" secondAttribute="centerY" id="alh-ce-001"/>
+                    </constraints>
+                </view>
+                <stackView hidden="YES" opaque="NO" contentMode="scaleToFill" alignment="center" spacing="8" translatesAutoresizingMaskIntoConstraints="NO" id="alh-sr-001" userLabel="Search Row">
+                    <rect key="frame" x="16" y="18" width="369" height="40"/>
+                    <subviews>
+                        <textField opaque="NO" contentMode="scaleToFill" horizontalHuggingPriority="249" contentHorizontalAlignment="left" contentVerticalAlignment="center" borderStyle="roundedRect" placeholder="Search articles" textAlignment="natural" minimumFontSize="12" translatesAutoresizingMaskIntoConstraints="NO" id="alh-sf-001" customClass="UISearchTextField">
+                            <rect key="frame" x="0.0" y="0.0" width="301" height="40"/>
+                            <constraints>
+                                <constraint firstAttribute="height" relation="greaterThanOrEqual" constant="40" id="alh-cf-001"/>
+                            </constraints>
+                            <fontDescription key="fontDescription" type="system" pointSize="14"/>
+                            <textInputTraits key="textInputTraits" autocorrectionType="no" returnKeyType="search" enablesReturnKeyAutomatically="NO"/>
+                            <connections>
+                                <action selector="searchTextChanged" destination="-1" eventType="editingChanged" id="alh-a3-001"/>
+                            </connections>
+                        </textField>
+                        <button opaque="NO" contentMode="scaleToFill" horizontalHuggingPriority="252" horizontalCompressionResistancePriority="752" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="alh-cb-001" userLabel="Cancel Button">
+                            <rect key="frame" x="309" y="3" width="60" height="34"/>
+                            <state key="normal" title="Cancel"/>
+                            <connections>
+                                <action selector="cancelTapped" destination="-1" eventType="touchUpInside" id="alh-a4-001"/>
+                            </connections>
+                        </button>
+                    </subviews>
+                </stackView>
+            </subviews>
+            <color key="backgroundColor" white="0.0" alpha="0.0" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+            <constraints>
+                <constraint firstItem="alh-tr-001" firstAttribute="top" secondItem="alh-rt-001" secondAttribute="top" id="alh-cg-001"/>
+                <constraint firstItem="alh-tr-001" firstAttribute="leading" secondItem="alh-rt-001" secondAttribute="leading" id="alh-ch-001"/>
+                <constraint firstAttribute="trailing" secondItem="alh-tr-001" secondAttribute="trailing" id="alh-ci-001"/>
+                <constraint firstAttribute="bottom" secondItem="alh-tr-001" secondAttribute="bottom" id="alh-cj-001"/>
+                <constraint firstItem="alh-sr-001" firstAttribute="leading" secondItem="alh-rt-001" secondAttribute="leading" constant="16" id="alh-ck-001"/>
+                <constraint firstAttribute="trailing" secondItem="alh-sr-001" secondAttribute="trailing" constant="16" id="alh-cl-001"/>
+                <constraint firstItem="alh-sr-001" firstAttribute="centerY" secondItem="alh-sb-001" secondAttribute="centerY" id="alh-cm-001"/>
+            </constraints>
+            <freeformSimulatedSizeMetrics key="simulatedDestinationMetrics"/>
+            <point key="canvasLocation" x="0.0" y="0.0"/>
+        </view>
+    </objects>
+</document>
