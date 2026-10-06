@@ -43,7 +43,7 @@ final class ArticleCardCell: UICollectionViewCell, NibReusable {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        layer.shadowPath = UIBezierPath(roundedRect: bounds, cornerRadius: AppMetrics.Card.cornerRadius).cgPath
+        CardStyle.updateShape(of: self)
     }
 
     func configure(with display: ArticleDisplay) {

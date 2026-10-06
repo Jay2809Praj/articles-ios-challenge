@@ -19,6 +19,14 @@ enum CardStyle {
         cell.layer.shadowOffset = .zero
     }
 
+    /// Keeps the glow and the keyboard-focus halo on the card's rounded shape.
+    /// Call from `layoutSubviews`.
+    static func updateShape(of cell: UICollectionViewCell) {
+        let radius = AppMetrics.Card.cornerRadius
+        cell.layer.shadowPath = UIBezierPath(roundedRect: cell.bounds, cornerRadius: radius).cgPath
+        cell.focusEffect = UIFocusHaloEffect(roundedRect: cell.bounds, cornerRadius: radius, curve: .continuous)
+    }
+
     static func animateHighlight(of cell: UICollectionViewCell, isHighlighted: Bool) {
         UIView.animate(
             withDuration: isHighlighted ? 0.12 : 0.3,
