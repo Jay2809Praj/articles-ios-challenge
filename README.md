@@ -17,8 +17,8 @@ An iOS / iPadOS app that lists articles from a mock API and shows a detail scree
 ## Setup and run
 
 ```bash
-git clone <repository-url>
-cd <repository-folder>
+git clone https://github.com/Jay2809Praj/articles-ios-challenge.git
+cd articles-ios-challenge
 pod install
 open Articles.xcworkspace
 ```
