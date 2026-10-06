@@ -25,14 +25,14 @@ final class NetworkEventLogger: EventMonitor {
         logger.debug("→ \(method) \(url)")
     }
 
-    func request(_ request: DataRequest, didParseResponse response: DataResponse<Data, AFError>) {
+    func request<Value: Sendable>(_ request: DataRequest, didParseResponse response: DataResponse<Value, AFError>) {
         let url = request.request?.url?.absoluteString ?? "<unknown url>"
         let duration = String(format: "%.0f ms", (response.metrics?.taskInterval.duration ?? 0) * 1000)
 
         switch response.result {
-        case .success(let data):
+        case .success:
             let status = response.response?.statusCode ?? 0
-            logger.info("← \(status) \(url) (\(data.count) bytes, \(duration))")
+            logger.info("← \(status) \(url) (\(response.data?.count ?? 0) bytes, \(duration))")
             logger.verbose("Response headers: \(response.response?.allHeaderFields ?? [:])")
         case .failure(let error) where error.isExplicitlyCancelledError:
             logger.warning("✕ Cancelled \(url)")
