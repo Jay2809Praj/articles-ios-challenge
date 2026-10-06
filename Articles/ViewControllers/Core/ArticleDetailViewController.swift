@@ -22,7 +22,7 @@ final class ArticleDetailViewController: UIViewController {
     private let display: ArticleDisplay
     private let favoritesManager: FavoritesManagerProtocol
     private weak var router: ArticleRouting?
-    private lazy var bannerPresenter = BannerPresenter(hostView: view)
+    private lazy var bannerPresenter = BannerPresenter(hostView: view, above: readFullArticleButton)
 
     override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
 

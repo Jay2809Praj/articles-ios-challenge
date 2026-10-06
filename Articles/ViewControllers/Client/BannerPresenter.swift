@@ -4,6 +4,8 @@ import UIKit
 /// dismissed (offline) or as a toast that leaves on its own.
 final class BannerPresenter {
     private weak var hostView: UIView?
+    /// A view at the bottom of the host the banner must stay clear of.
+    private weak var anchorView: UIView?
     private let banner = StatusBannerView()
     private var bottomConstraint: NSLayoutConstraint?
     private var dismissWorkItem: DispatchWorkItem?
@@ -11,11 +13,16 @@ final class BannerPresenter {
     private var pinnedContent: StatusBannerView.Content?
 
     private let visibleOffset: CGFloat = -16
-    private let hiddenOffset: CGFloat = 96
+    private let hiddenOffset: CGFloat = 160
     private let toastDuration: TimeInterval = 3
 
-    init(hostView: UIView) {
+    /// - Parameters:
+    ///   - hostView: The view the banner is added to.
+    ///   - anchorView: Optional subview of `hostView` to float above, such as
+    ///     a bottom button. Defaults to the bottom safe area.
+    init(hostView: UIView, above anchorView: UIView? = nil) {
         self.hostView = hostView
+        self.anchorView = anchorView
     }
 
     /// Shows a banner that stays until `unpin()` is called.
@@ -98,15 +105,17 @@ final class BannerPresenter {
         hostView.addSubview(banner)
 
         let bottom = banner.bottomAnchor.constraint(
-            equalTo: hostView.safeAreaLayoutGuide.bottomAnchor,
+            equalTo: anchorView?.topAnchor ?? hostView.safeAreaLayoutGuide.bottomAnchor,
             constant: hiddenOffset
         )
         bottomConstraint = bottom
         NSLayoutConstraint.activate([
             bottom,
-            banner.centerXAnchor.constraint(equalTo: hostView.centerXAnchor),
-            banner.leadingAnchor.constraint(greaterThanOrEqualTo: hostView.leadingAnchor, constant: 16),
-            banner.trailingAnchor.constraint(lessThanOrEqualTo: hostView.trailingAnchor, constant: -16)
+            // The safe area keeps the banner clear of the iPad sidebar, which
+            // floats above the detail column on iOS 26.
+            banner.centerXAnchor.constraint(equalTo: hostView.safeAreaLayoutGuide.centerXAnchor),
+            banner.leadingAnchor.constraint(greaterThanOrEqualTo: hostView.safeAreaLayoutGuide.leadingAnchor, constant: 16),
+            banner.trailingAnchor.constraint(lessThanOrEqualTo: hostView.safeAreaLayoutGuide.trailingAnchor, constant: -16)
         ])
         hostView.layoutIfNeeded()
     }
