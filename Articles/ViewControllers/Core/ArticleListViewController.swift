@@ -102,13 +102,14 @@ final class ArticleListViewController: UIViewController {
 
     private func loadArticles() {
         loadTask?.cancel()
-        render()
-
         loadTask = Task { [weak self, articlesManager] in
             let result = await articlesManager.loadArticles()
             guard !Task.isCancelled else { return }
             self?.apply(result)
         }
+        // Rendered after the task exists so an empty screen shows "loading"
+        // rather than the previous failure while the retry is in flight.
+        render()
     }
 
     private func apply(_ result: ArticlesLoadResult) {
