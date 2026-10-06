@@ -1,0 +1,44 @@
+PODS:
+  - Alamofire (5.12.2)
+  - Cache (6.0.0)
+  - Kingfisher (8.13.0)
+  - ObjcExceptionBridging (7.1.5):
+    - ObjcExceptionBridging/ObjcExceptionBridging (= 7.1.5)
+  - ObjcExceptionBridging/ObjcExceptionBridging (7.1.5)
+  - ReachabilitySwift (5.2.4)
+  - Swinject (2.9.1)
+  - XCGLogger (7.1.5):
+    - XCGLogger/Core (= 7.1.5)
+  - XCGLogger/Core (7.1.5):
+    - ObjcExceptionBridging
+
+DEPENDENCIES:
+  - Alamofire (~> 5.10)
+  - Cache (~> 6.0)
+  - Kingfisher (~> 8.0)
+  - ReachabilitySwift (~> 5.2)
+  - Swinject (~> 2.9)
+  - XCGLogger (~> 7.1)
+
+SPEC REPOS:
+  trunk:
+    - Alamofire
+    - Cache
+    - Kingfisher
+    - ObjcExceptionBridging
+    - ReachabilitySwift
+    - Swinject
+    - XCGLogger
+
+SPEC CHECKSUMS:
+  Alamofire: c5f37d8f438dc1d7fd3ff767f2f80fd01ca381d7
+  Cache: 4ca7e00363fca5455f26534e5607634c820ffc2d
+  Kingfisher: 260f690679115e70aac534e18cf1f3cd70814d5c
+  ObjcExceptionBridging: d3d37d62981bb7f252ecb31b62d7e23a96bbfb8a
+  ReachabilitySwift: 32793e867593cfc1177f5d16491e3a197d2fccda
+  Swinject: a827d508c6270da03ec74e558e728917a888fa9b
+  XCGLogger: 399c5885210b4e2ad79d9f7a29b105d672ef724f
+
+PODFILE CHECKSUM: 15ac414f930bd9acb005a7e5f59ff17ca833444a
+
+COCOAPODS: 1.16.2

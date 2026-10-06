@@ -1,0 +1,16 @@
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+
+# CocoaPods – run `pod install` after cloning
+Pods/
+
+# macOS
+.DS_Store
+
+# Tooling
+.claude/
