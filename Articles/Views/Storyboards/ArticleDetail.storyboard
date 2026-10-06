@@ -115,9 +115,6 @@
                                             <constraint firstAttribute="trailing" secondItem="ads-hb-001" secondAttribute="trailing" id="ads-ci-002"/>
                                             <constraint firstItem="ads-hb-001" firstAttribute="bottom" secondItem="ads-is-001" secondAttribute="centerY" constant="9.5" id="ads-cj-001"/>
                                             <constraint firstItem="ads-cs-001" firstAttribute="top" secondItem="ads-cv-001" secondAttribute="top" id="ads-ck-001"/>
-                                            <constraint firstItem="ads-cs-001" firstAttribute="centerX" secondItem="ads-cv-001" secondAttribute="centerX" id="ads-cl-001"/>
-                                            <constraint firstItem="ads-cs-001" firstAttribute="leading" relation="greaterThanOrEqual" secondItem="ads-cv-001" secondAttribute="leading" constant="24" id="ads-cm-001"/>
-                                            <constraint firstItem="ads-cs-001" firstAttribute="width" secondItem="ads-cv-001" secondAttribute="width" constant="-48" priority="750" id="ads-cn-001"/>
                                             <constraint firstItem="ads-cs-001" firstAttribute="width" relation="lessThanOrEqual" constant="640" id="ads-co-001"/>
                                             <constraint firstAttribute="bottom" secondItem="ads-cs-001" secondAttribute="bottom" constant="32" id="ads-cp-001"/>
                                         </constraints>
@@ -165,12 +162,9 @@
                                 </subviews>
                                 <color key="backgroundColor" name="Card"/>
                                 <constraints>
-                                    <constraint firstItem="ads-bb-001" firstAttribute="leading" secondItem="ads-tp-001" secondAttribute="leading" constant="24" id="ads-cz-001"/>
                                     <constraint firstAttribute="bottom" secondItem="ads-bb-001" secondAttribute="bottom" constant="17" id="ads-d1-001"/>
-                                    <constraint firstItem="ads-nt-001" firstAttribute="centerX" secondItem="ads-tp-001" secondAttribute="centerX" id="ads-d2-001"/>
                                     <constraint firstItem="ads-nt-001" firstAttribute="centerY" secondItem="ads-bb-001" secondAttribute="centerY" id="ads-d3-001"/>
                                     <constraint firstItem="ads-nt-001" firstAttribute="leading" relation="greaterThanOrEqual" secondItem="ads-bb-001" secondAttribute="trailing" constant="10" id="ads-d4-001"/>
-                                    <constraint firstAttribute="trailing" secondItem="ads-fb-001" secondAttribute="trailing" constant="22" id="ads-d5-001"/>
                                     <constraint firstItem="ads-fb-001" firstAttribute="centerY" secondItem="ads-bb-001" secondAttribute="centerY" id="ads-d6-001"/>
                                 </constraints>
                             </view>
@@ -197,9 +191,15 @@
                             <constraint firstItem="ads-sv-001" firstAttribute="leading" secondItem="ads-vw-001" secondAttribute="leading" id="ads-de-001"/>
                             <constraint firstAttribute="trailing" secondItem="ads-sv-001" secondAttribute="trailing" id="ads-df-001"/>
                             <constraint firstAttribute="bottom" secondItem="ads-sv-001" secondAttribute="bottom" id="ads-dg-001"/>
-                            <constraint firstItem="ads-rb-001" firstAttribute="centerX" secondItem="ads-vw-001" secondAttribute="centerX" id="ads-dh-001"/>
-                            <constraint firstItem="ads-rb-001" firstAttribute="leading" secondItem="ads-vw-001" secondAttribute="leading" constant="34" priority="750" id="ads-di-001"/>
                             <constraint firstItem="ads-sa-001" firstAttribute="bottom" secondItem="ads-rb-001" secondAttribute="bottom" constant="16" id="ads-dj-001"/>
+                            <constraint firstItem="ads-cs-001" firstAttribute="centerX" secondItem="ads-sa-001" secondAttribute="centerX" id="ads-cl-001"/>
+                            <constraint firstItem="ads-cs-001" firstAttribute="leading" relation="greaterThanOrEqual" secondItem="ads-sa-001" secondAttribute="leading" constant="24" id="ads-cm-001"/>
+                            <constraint firstItem="ads-cs-001" firstAttribute="width" secondItem="ads-sa-001" secondAttribute="width" constant="-48" priority="750" id="ads-cn-001"/>
+                            <constraint firstItem="ads-bb-001" firstAttribute="leading" secondItem="ads-sa-001" secondAttribute="leading" constant="24" id="ads-cz-001"/>
+                            <constraint firstItem="ads-nt-001" firstAttribute="centerX" secondItem="ads-sa-001" secondAttribute="centerX" id="ads-d2-001"/>
+                            <constraint firstItem="ads-sa-001" firstAttribute="trailing" secondItem="ads-fb-001" secondAttribute="trailing" constant="22" id="ads-d5-001"/>
+                            <constraint firstItem="ads-rb-001" firstAttribute="centerX" secondItem="ads-sa-001" secondAttribute="centerX" id="ads-dh-001"/>
+                            <constraint firstItem="ads-rb-001" firstAttribute="leading" secondItem="ads-sa-001" secondAttribute="leading" constant="34" priority="750" id="ads-di-001"/>
                         </constraints>
                     </view>
                     <connections>
