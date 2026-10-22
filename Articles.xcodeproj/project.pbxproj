@@ -131,7 +131,7 @@
 		36030D83A883ED1F11FB5394 /* ContentStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentStateView.swift; sourceTree = "<group>"; };
 		39FDEF2180A895E3F094616F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		3C233E9D24537ECD26523E5B /* StatusBannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBannerView.swift; sourceTree = "<group>"; };
-		4011C341D7DDF83439173CE8 /* ArticlesTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = ArticlesTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		4011C341D7DDF83439173CE8 /* ArticlesTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ArticlesTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		480905D6EE1FCA65FD240067 /* RobotoCondensed-Black.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "RobotoCondensed-Black.ttf"; sourceTree = "<group>"; };
 		4B6B7A5178CEA3600299F1F1 /* Article+Identity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Article+Identity.swift"; sourceTree = "<group>"; };
 		4D4AA0A257D11033AE6FDAEB /* ReachabilityProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReachabilityProvider.swift; sourceTree = "<group>"; };
@@ -192,7 +192,7 @@
 		EFEC760277814CF53CCA30FF /* FavoritesManagerProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoritesManagerProtocol.swift; sourceTree = "<group>"; };
 		F22EF13F09B0D5C4902CB3D3 /* ArticleLinkValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleLinkValidator.swift; sourceTree = "<group>"; };
 		F548B206B73AA6EEAF34EE0C /* AppColor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppColor.swift; sourceTree = "<group>"; };
-		F752512C3DD76F22DEDDB75C /* Articles.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Articles.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F752512C3DD76F22DEDDB75C /* Articles.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Articles.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FCF8C49A1B27799ECA49772C /* NetworkClientProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkClientProtocol.swift; sourceTree = "<group>"; };
 		FD1022E2958BED15BD2891BA /* Montserrat-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Montserrat-SemiBold.ttf"; sourceTree = "<group>"; };
 		FD239869446B5433C1A65BCC /* ArticlesProviderProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticlesProviderProtocol.swift; sourceTree = "<group>"; };
@@ -284,7 +284,6 @@
 				D170D90A6D2DDAF87F9549FB /* Pods-ArticlesTests.debug.xcconfig */,
 				D18993D14162066403A1CFEB /* Pods-ArticlesTests.release.xcconfig */,
 			);
-			name = Pods;
 			path = Pods;
 			sourceTree = "<group>";
 		};
@@ -644,9 +643,13 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Articles/Pods-Articles-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
+			inputPaths = (
+			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Articles/Pods-Articles-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -865,6 +868,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 5X7D9JA3UA;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Articles/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -883,6 +887,7 @@
 			baseConfigurationReference = D18993D14162066403A1CFEB /* Pods-ArticlesTests.release.xcconfig */;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				DEVELOPMENT_TEAM = 5X7D9JA3UA;
 				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -903,6 +908,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 5X7D9JA3UA;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Articles/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -921,6 +927,7 @@
 			baseConfigurationReference = D170D90A6D2DDAF87F9549FB /* Pods-ArticlesTests.debug.xcconfig */;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				DEVELOPMENT_TEAM = 5X7D9JA3UA;
 				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
