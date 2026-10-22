@@ -24,6 +24,11 @@ enum AppConstants {
         static let didChangeNotification = Notification.Name("SavedArticlesDidChangeNotification")
     }
 
+    enum Pagination {
+        static let pageSize = 10
+        static let simulatedLoadDelay: TimeInterval = 0.8
+    }
+
     enum Storyboard {
         static let articleList = "ArticleList"
         static let articleDetail = "ArticleDetail"
