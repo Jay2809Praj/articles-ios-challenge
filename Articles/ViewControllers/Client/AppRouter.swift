@@ -59,6 +59,11 @@ final class AppRouter: NSObject, ArticleRouting {
         }
     }
 
+    /// Direct presentation of article detail used by deep linking (e.g. from Widget).
+    func showArticleDetail(for article: Article) {
+        showDetail(for: article, sourceViewProvider: { nil })
+    }
+
     func closeDetail() {
         if primaryNavigation.viewControllers.count > 1 {
             primaryNavigation.popViewController(animated: true)

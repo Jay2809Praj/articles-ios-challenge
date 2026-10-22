@@ -179,4 +179,85 @@ final class ArticlePresentationTests: XCTestCase {
         XCTAssertFalse(ArticlePaginator.hasMorePages(totalCount: 20, page: 0, pageSize: 10))
         XCTAssertFalse(ArticlePaginator.hasMorePages(totalCount: 20, page: -1, pageSize: 10))
     }
+
+    // MARK: - Widget Store & Deep Linking
+
+    func testSharedArticleStoreSavesAndLoadsLatestArticle() {
+        let testArticle = WidgetArticleData(
+            title: "Breaking News: Major Tech Announcement",
+            sourceName: "TechChronicle",
+            dateString: "23 Oct,2026",
+            webURL: "https://example.com/breaking-news",
+            imageURL: "https://example.com/image.jpg"
+        )
+
+        SharedArticleStore.save(testArticle)
+        let loaded = SharedArticleStore.loadLatestArticle()
+
+        XCTAssertNotNil(loaded)
+        XCTAssertEqual(loaded?.title, testArticle.title)
+        XCTAssertEqual(loaded?.sourceName, testArticle.sourceName)
+        XCTAssertEqual(loaded?.dateString, testArticle.dateString)
+        XCTAssertEqual(loaded?.webURL, testArticle.webURL)
+        XCTAssertEqual(loaded?.imageURL, testArticle.imageURL)
+    }
+
+    func testWidgetDeepLinkURLConstruction() {
+        let webURL = "https://example.com/article?id=123&category=tech"
+        var components = URLComponents()
+        components.scheme = "articles"
+        components.host = "open"
+        components.queryItems = [URLQueryItem(name: "url", value: webURL)]
+
+        let deepLink = components.url
+        XCTAssertNotNil(deepLink)
+        XCTAssertEqual(deepLink?.scheme, "articles")
+        XCTAssertEqual(deepLink?.host, "open")
+
+        let parsed = URLComponents(url: deepLink!, resolvingAgainstBaseURL: false)
+        let param = parsed?.queryItems?.first(where: { $0.name == "url" })?.value
+        XCTAssertEqual(param, webURL)
+    }
+
+    func testSharedArticleStoreSavesAndLoadsImageData() {
+        let dummyImageData = "test_image_bytes".data(using: .utf8)!
+        SharedArticleStore.saveImageData(dummyImageData)
+
+        let loadedImageData = SharedArticleStore.loadImageData()
+        XCTAssertNotNil(loadedImageData)
+        XCTAssertEqual(loadedImageData, dummyImageData)
+    }
+
+    func testSharedArticleStoreSavesAndLoadsArticlesList() {
+        let articles = [
+            WidgetArticleData(title: "First Article", sourceName: "Source 1", dateString: "Today", webURL: "https://1.com", imageURL: nil),
+            WidgetArticleData(title: "Second Article", sourceName: "Source 2", dateString: "Yesterday", webURL: "https://2.com", imageURL: nil)
+        ]
+
+        SharedArticleStore.saveArticles(articles)
+        let loaded = SharedArticleStore.loadArticles()
+
+        XCTAssertEqual(loaded.count, 2)
+        XCTAssertEqual(loaded.first?.title, "First Article")
+        XCTAssertEqual(loaded.last?.title, "Second Article")
+    }
+
+    func testSharedArticleStoreCyclingNextAndPrevious() {
+        let articles = [
+            WidgetArticleData(title: "Article A", sourceName: "S1"),
+            WidgetArticleData(title: "Article B", sourceName: "S2"),
+            WidgetArticleData(title: "Article C", sourceName: "S3")
+        ]
+        SharedArticleStore.saveArticles(articles)
+
+        // Starting at index 0 or any current index
+        let initial = SharedArticleStore.getCurrentIndex()
+        SharedArticleStore.cycleToNextArticle()
+        let next = SharedArticleStore.getCurrentIndex()
+        XCTAssertEqual(next, (initial + 1) % 3)
+
+        SharedArticleStore.cycleToPreviousArticle()
+        let prev = SharedArticleStore.getCurrentIndex()
+        XCTAssertEqual(prev, initial)
+    }
 }
