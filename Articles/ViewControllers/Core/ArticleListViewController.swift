@@ -23,6 +23,7 @@ final class ArticleListViewController: UIViewController {
     private var latestResult: ArticlesLoadResult?
     private var searchQuery = ""
     private var layoutMode: ArticleListLayoutMode = .list
+    private(set) var currentFilter: ArticleListSectionFilter = .all
     private var loadTask: Task<Void, Never>?
     private var connectivityObservation: ConnectivityObservation?
     private var savedObserver: NSObjectProtocol?
@@ -61,6 +62,7 @@ final class ArticleListViewController: UIViewController {
         super.viewDidLoad()
         configureCollectionView()
         headerView.delegate = self
+        headerView.updateSavedCount(favoritesManager.savedArticles().count)
         embed(stateController, in: stateContainer)
         observeConnectivity()
         observeSavedArticles()
@@ -98,7 +100,13 @@ final class ArticleListViewController: UIViewController {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.updateVisibleSavedStates()
+            guard let self else { return }
+            self.headerView.updateSavedCount(self.favoritesManager.savedArticles().count)
+            if self.currentFilter == .saved {
+                self.render()
+            } else {
+                self.updateVisibleSavedStates()
+            }
         }
     }
 
@@ -159,6 +167,7 @@ final class ArticleListViewController: UIViewController {
     /// When a refresh fails but saved articles are on screen, say so without
     /// taking the content away.
     private func reportFailureIfNeeded(of result: ArticlesLoadResult) {
+        guard currentFilter == .all else { return }
         guard let error = result.error, !result.articles.isEmpty else {
             bannerPresenter.unpin()
             return
@@ -183,6 +192,9 @@ final class ArticleListViewController: UIViewController {
             bannerPresenter.unpin()
             bannerPresenter.toast(.backOnline)
             loadArticles()
+        } else if currentFilter == .saved {
+            // Saved articles remain 100% accessible offline
+            render()
         } else if articles.isEmpty {
             render()
         } else {
@@ -193,7 +205,8 @@ final class ArticleListViewController: UIViewController {
     // MARK: - Rendering
 
     private var visibleArticles: [Article] {
-        ArticleSearchFilter.filter(articles, matching: searchQuery)
+        let baseArticles = currentFilter == .saved ? favoritesManager.savedArticles() : articles
+        return ArticleSearchFilter.filter(baseArticles, matching: searchQuery)
     }
 
     private func render() {
@@ -211,6 +224,17 @@ final class ArticleListViewController: UIViewController {
 
     /// The full-area state to show instead of the list, or `nil` for content.
     private func currentState(visibleCount: Int) -> ContentStateView.Kind? {
+        if currentFilter == .saved {
+            let saved = favoritesManager.savedArticles()
+            if saved.isEmpty {
+                return .emptySaved
+            }
+            if visibleCount == 0 && !searchQuery.isEmpty {
+                return .noResults(query: searchQuery)
+            }
+            return nil
+        }
+
         guard articles.isEmpty else {
             return visibleCount == 0 ? .noResults(query: searchQuery) : nil
         }
@@ -295,6 +319,18 @@ extension ArticleListViewController: ArticleListHeaderViewDelegate {
 
     func headerViewDidEndSearch(_ headerView: ArticleListHeaderView) {
         searchQuery = ""
+        render()
+    }
+
+    func headerView(_ headerView: ArticleListHeaderView, didSelectFilter filter: ArticleListSectionFilter) {
+        guard currentFilter != filter else { return }
+        currentFilter = filter
+        refreshControl.isEnabled = (filter == .all)
+        if filter == .saved {
+            bannerPresenter.unpin()
+        } else if !connectivityManager.isOnline && !articles.isEmpty {
+            bannerPresenter.pin(.offline(savedAgo: savedAgo(for: latestResult)))
+        }
         render()
     }
 }

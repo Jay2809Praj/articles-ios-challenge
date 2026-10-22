@@ -99,4 +99,32 @@ final class ArticlePresentationTests: XCTestCase {
         XCTAssertEqual(ArticleSearchFilter.filter(articles, matching: "   ").count, 3)
         XCTAssertTrue(ArticleSearchFilter.filter(articles, matching: "zzqx").isEmpty)
     }
+
+    // MARK: - Section Filter & Saved State
+
+    func testSectionFilterEnumValues() {
+        XCTAssertEqual(ArticleListSectionFilter.all.rawValue, 0)
+        XCTAssertEqual(ArticleListSectionFilter.saved.rawValue, 1)
+        XCTAssertEqual(ArticleListSectionFilter(rawValue: 0), .all)
+        XCTAssertEqual(ArticleListSectionFilter(rawValue: 1), .saved)
+    }
+
+    func testContentStateViewEmptySavedState() {
+        let state = ContentStateView(kind: .emptySaved)
+        XCTAssertEqual(state.kind, .emptySaved)
+    }
+
+    func testSearchFiltersSavedSubset() {
+        let savedArticles = [
+            Article.sample(title: "Saved Swift Guide", url: "https://example.com/swift"),
+            Article.sample(title: "Saved Kotlin Guide", url: "https://example.com/kotlin")
+        ]
+
+        let searchSwift = ArticleSearchFilter.filter(savedArticles, matching: "swift")
+        XCTAssertEqual(searchSwift.count, 1)
+        XCTAssertEqual(searchSwift.first?.title, "Saved Swift Guide")
+
+        let searchNone = ArticleSearchFilter.filter(savedArticles, matching: "flutter")
+        XCTAssertTrue(searchNone.isEmpty)
+    }
 }

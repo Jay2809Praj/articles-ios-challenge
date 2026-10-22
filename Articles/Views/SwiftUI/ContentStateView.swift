@@ -12,6 +12,7 @@ struct ContentStateView: View {
         case offline
         case error(message: String)
         case empty
+        case emptySaved
         case noResults(query: String)
         case selectArticle
     }
@@ -88,6 +89,7 @@ struct ContentStateView: View {
         case .error: AppIcon.Name.error
         case .noResults: AppIcon.Name.noResults
         case .selectArticle: AppIcon.Name.selectArticle
+        case .emptySaved: "bookmark.slash"
         default: AppIcon.Name.empty
         }
     }
@@ -98,6 +100,7 @@ struct ContentStateView: View {
         case .offline: "You’re offline"
         case .error: "Something went wrong"
         case .empty: "No articles yet"
+        case .emptySaved: "No Saved Articles"
         case .noResults: "No results"
         case .selectArticle: "Select an article"
         }
@@ -109,6 +112,7 @@ struct ContentStateView: View {
         case .offline: "Please connect to the internet and try again."
         case .error(let message): message
         case .empty: "There is nothing to read right now. Please check back later."
+        case .emptySaved: "Articles you save for later will appear here, even when offline."
         case .noResults(let query): "Nothing matches “\(query)”."
         case .selectArticle: "Choose an article from the list to read it here."
         }
