@@ -6,6 +6,10 @@ final class ArticleListDataSource: NSObject, UICollectionViewDataSource {
     var layoutMode: ArticleListLayoutMode = .list
     /// Called when the "Read More" button on a card is tapped.
     var onReadMore: ((Article) -> Void)?
+    /// Checks whether an article is currently saved.
+    var isSaved: ((Article) -> Bool)?
+    /// Called when the save button on a card is tapped.
+    var onToggleSave: ((Article) -> Void)?
 
     func registerCells(in collectionView: UICollectionView) {
         collectionView.register(ArticleCardCell.self)
@@ -30,16 +34,19 @@ final class ArticleListDataSource: NSObject, UICollectionViewDataSource {
     ) -> UICollectionViewCell {
         let article = articles[indexPath.item]
         let display = ArticleDisplay(article: article)
+        let isArticleSaved = isSaved?(article) ?? false
 
         switch layoutMode {
         case .list:
             let cell = collectionView.dequeue(ArticleCardCell.self, for: indexPath)
-            cell.configure(with: display)
+            cell.configure(with: display, isSaved: isArticleSaved)
             cell.onReadMore = { [weak self] in self?.onReadMore?(article) }
+            cell.onToggleSave = { [weak self] in self?.onToggleSave?(article) }
             return cell
         case .grid:
             let cell = collectionView.dequeue(ArticleGridCell.self, for: indexPath)
-            cell.configure(with: display)
+            cell.configure(with: display, isSaved: isArticleSaved)
+            cell.onToggleSave = { [weak self] in self?.onToggleSave?(article) }
             return cell
         }
     }

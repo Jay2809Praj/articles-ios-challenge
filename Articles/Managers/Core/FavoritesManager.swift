@@ -41,7 +41,8 @@ final class FavoritesManager: FavoritesManagerProtocol {
     private let storageKey = AppConstants.SavedArticles.recordsKey
     let storageLimitBytes: Int64
 
-    private let lock = NSLock()
+    private let lock = NSRecursiveLock()
+    private let persistenceQueue = DispatchQueue(label: "com.jayprajapati.articles.savedPersistence", qos: .utility)
     private var records: [SavedArticleRecord] = []
 
     /// Injection hooks for unit testing image caching without network requests.
@@ -81,31 +82,36 @@ final class FavoritesManager: FavoritesManagerProtocol {
     }
 
     func save(_ article: Article) {
-        lock.lock()
-        defer { lock.unlock() }
+        let shouldCacheImage: Bool = {
+            lock.lock()
+            defer { lock.unlock() }
 
-        // If already saved, update savedAt timestamp and persist
-        if let index = records.firstIndex(where: { $0.article.identifier == article.identifier }) {
-            let existing = records[index]
-            let updated = SavedArticleRecord(article: article, savedAt: Date(), imageByteSize: existing.imageByteSize)
-            records.remove(at: index)
-            records.insert(updated, at: 0)
+            // If already saved, update savedAt timestamp and persist
+            if let index = records.firstIndex(where: { $0.article.identifier == article.identifier }) {
+                let existing = records[index]
+                let updated = SavedArticleRecord(article: article, savedAt: Date(), imageByteSize: existing.imageByteSize)
+                records.remove(at: index)
+                records.insert(updated, at: 0)
+                persistRecords()
+                notifyChange()
+                return false
+            }
+
+            let newRecord = SavedArticleRecord(article: article, savedAt: Date(), imageByteSize: 0)
+
+            // Enforce 50 MB storage limit before adding
+            enforceLimit(freeing: newRecord.totalByteSize)
+
+            records.insert(newRecord, at: 0)
             persistRecords()
             notifyChange()
-            return
+            return true
+        }()
+
+        if shouldCacheImage {
+            // Cache image to disk for offline access without holding lock
+            cacheImageForOffline(article: article)
         }
-
-        let newRecord = SavedArticleRecord(article: article, savedAt: Date(), imageByteSize: 0)
-
-        // Enforce 50 MB storage limit before adding
-        enforceLimit(freeing: newRecord.totalByteSize)
-
-        records.insert(newRecord, at: 0)
-        persistRecords()
-        notifyChange()
-
-        // Cache image to disk for offline access
-        cacheImageForOffline(article: article)
     }
 
     func remove(_ article: Article) {
@@ -182,12 +188,12 @@ final class FavoritesManager: FavoritesManagerProtocol {
             return
         }
 
-        // Production Kingfisher offline caching
+        // Production Kingfisher offline caching dispatches callback to persistence queue
         KingfisherManager.shared.retrieveImage(
             with: url,
             options: [
                 .cacheOriginalImage,
-                .waitForCache
+                .callbackQueue(.dispatch(persistenceQueue))
             ]
         ) { [weak self] result in
             guard let self else { return }
@@ -223,7 +229,9 @@ final class FavoritesManager: FavoritesManagerProtocol {
         if let imageRemover = self.imageRemover {
             imageRemover(url)
         } else {
-            ImageCache.default.removeImage(forKey: url.absoluteString, fromDisk: true)
+            persistenceQueue.async {
+                ImageCache.default.removeImage(forKey: url.absoluteString, fromDisk: true)
+            }
         }
     }
 

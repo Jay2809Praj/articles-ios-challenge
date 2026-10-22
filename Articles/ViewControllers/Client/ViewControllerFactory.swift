@@ -25,6 +25,7 @@ final class ViewControllerFactory: ViewControllerFactoryProtocol {
                     coder: coder,
                     articlesManager: resolver.resolve(ArticlesManagerProtocol.self)!,
                     connectivityManager: resolver.resolve(ConnectivityManagerProtocol.self)!,
+                    favoritesManager: resolver.resolve(FavoritesManagerProtocol.self)!,
                     router: router
                 )
             }

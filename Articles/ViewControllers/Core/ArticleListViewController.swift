@@ -9,6 +9,7 @@ final class ArticleListViewController: UIViewController {
 
     private let articlesManager: ArticlesManagerProtocol
     private let connectivityManager: ConnectivityManagerProtocol
+    private let favoritesManager: FavoritesManagerProtocol
     private weak var router: ArticleRouting?
 
     private let dataSource = ArticleListDataSource()
@@ -24,6 +25,7 @@ final class ArticleListViewController: UIViewController {
     private var layoutMode: ArticleListLayoutMode = .list
     private var loadTask: Task<Void, Never>?
     private var connectivityObservation: ConnectivityObservation?
+    private var savedObserver: NSObjectProtocol?
 
     override var preferredStatusBarStyle: UIStatusBarStyle { .darkContent }
 
@@ -33,10 +35,12 @@ final class ArticleListViewController: UIViewController {
         coder: NSCoder,
         articlesManager: ArticlesManagerProtocol,
         connectivityManager: ConnectivityManagerProtocol,
+        favoritesManager: FavoritesManagerProtocol,
         router: ArticleRouting
     ) {
         self.articlesManager = articlesManager
         self.connectivityManager = connectivityManager
+        self.favoritesManager = favoritesManager
         self.router = router
         super.init(coder: coder)
     }
@@ -48,6 +52,9 @@ final class ArticleListViewController: UIViewController {
 
     deinit {
         loadTask?.cancel()
+        if let savedObserver {
+            NotificationCenter.default.removeObserver(savedObserver)
+        }
     }
 
     override func viewDidLoad() {
@@ -56,6 +63,7 @@ final class ArticleListViewController: UIViewController {
         headerView.delegate = self
         embed(stateController, in: stateContainer)
         observeConnectivity()
+        observeSavedArticles()
         observeDynamicType()
 
         // Paint the cached list immediately, then refresh it in the background.
@@ -72,6 +80,8 @@ final class ArticleListViewController: UIViewController {
     private func configureCollectionView() {
         dataSource.registerCells(in: collectionView)
         dataSource.onReadMore = { [weak self] article in self?.open(article) }
+        dataSource.isSaved = { [weak self] article in self?.favoritesManager.isSaved(article) ?? false }
+        dataSource.onToggleSave = { [weak self] article in self?.favoritesManager.toggleSave(article) }
 
         collectionView.dataSource = dataSource
         collectionView.delegate = self
@@ -80,6 +90,31 @@ final class ArticleListViewController: UIViewController {
         refreshControl.tintColor = AppColor.accent
         refreshControl.addTarget(self, action: #selector(refreshPulled), for: .valueChanged)
         collectionView.refreshControl = refreshControl
+    }
+
+    private func observeSavedArticles() {
+        savedObserver = NotificationCenter.default.addObserver(
+            forName: AppConstants.SavedArticles.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.updateVisibleSavedStates()
+        }
+    }
+
+    private func updateVisibleSavedStates() {
+        guard let collectionView else { return }
+        for cell in collectionView.visibleCells {
+            if let cardCell = cell as? ArticleCardCell,
+               let indexPath = collectionView.indexPath(for: cardCell),
+               let article = dataSource.article(at: indexPath) {
+                cardCell.updateSavedState(favoritesManager.isSaved(article))
+            } else if let gridCell = cell as? ArticleGridCell,
+                      let indexPath = collectionView.indexPath(for: gridCell),
+                      let article = dataSource.article(at: indexPath) {
+                gridCell.updateSavedState(favoritesManager.isSaved(article))
+            }
+        }
     }
 
     private func observeConnectivity() {

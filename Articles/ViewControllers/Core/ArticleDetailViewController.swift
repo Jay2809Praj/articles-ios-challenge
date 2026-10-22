@@ -23,6 +23,7 @@ final class ArticleDetailViewController: UIViewController {
     private let favoritesManager: FavoritesManagerProtocol
     private weak var router: ArticleRouting?
     private lazy var bannerPresenter = BannerPresenter(hostView: view, above: readFullArticleButton)
+    private var savedObserver: NSObjectProtocol?
 
     override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
 
@@ -54,15 +55,32 @@ final class ArticleDetailViewController: UIViewController {
         fatalError("Use ViewControllerFactory to create ArticleDetailViewController")
     }
 
+    deinit {
+        if let savedObserver {
+            NotificationCenter.default.removeObserver(savedObserver)
+        }
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         configureAppearance()
         renderText()
         renderFavoriteState(animated: false)
+        observeSavedArticles()
         articleImageView.setImage(with: display.imageURL)
 
         registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: Self, _) in
             self.renderText()
+        }
+    }
+
+    private func observeSavedArticles() {
+        savedObserver = NotificationCenter.default.addObserver(
+            forName: AppConstants.SavedArticles.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.renderFavoriteState(animated: true)
         }
     }
 

@@ -119,4 +119,60 @@ final class FavoritesManagerTests: XCTestCase {
         XCTAssertTrue(manager.savedArticles().isEmpty)
         XCTAssertEqual(manager.totalStorageBytes, 0)
     }
+
+    func testRapidTogglingMaintainsConsistentState() {
+        let manager = FavoritesManager(defaults: defaults, storageName: suiteName, logger: .silent)
+        let article = Article.sample(title: "Rapid Toggle", url: "https://example.com/rapid")
+
+        for i in 1...10 {
+            let isSaved = manager.toggleSave(article)
+            let expected = (i % 2 != 0)
+            XCTAssertEqual(isSaved, expected, "Failed on toggle iteration \(i)")
+            XCTAssertEqual(manager.isSaved(article), expected)
+        }
+
+        XCTAssertFalse(manager.isSaved(article))
+        XCTAssertTrue(manager.savedArticles().isEmpty)
+    }
+
+    func testSynchronousImageDownloaderDoesNotDeadlock() {
+        let manager = FavoritesManager(defaults: defaults, storageName: suiteName, logger: .silent)
+        let article = Article.sample(title: "Sync Download", url: "https://example.com/syncdownload")
+
+        // Simulate synchronous cache hits from Kingfisher (which previously caused deadlock)
+        manager.imageDownloader = { _, completion in
+            completion(45_000)
+        }
+
+        for _ in 1...10 {
+            manager.save(article)
+            XCTAssertTrue(manager.isSaved(article))
+            manager.remove(article)
+            XCTAssertFalse(manager.isSaved(article))
+        }
+    }
+
+    func testConcurrentRapidTogglingNeverDeadlocks() {
+        let manager = FavoritesManager(defaults: defaults, storageName: suiteName, logger: .silent)
+        let article = Article.sample(title: "Concurrent", url: "https://example.com/concurrent")
+
+        manager.imageDownloader = { _, completion in
+            completion(25_000)
+        }
+
+        let group = DispatchGroup()
+        for _ in 0..<6 {
+            group.enter()
+            DispatchQueue.global(qos: .userInitiated).async {
+                for _ in 0..<20 {
+                    manager.toggleSave(article)
+                    _ = manager.isSaved(article)
+                }
+                group.leave()
+            }
+        }
+
+        let result = group.wait(timeout: .now() + 5.0)
+        XCTAssertEqual(result, .success, "Concurrent toggles deadlocked!")
+    }
 }
