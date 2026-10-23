@@ -14,7 +14,9 @@ enum ArticleListLayoutMode {
 /// from the card widths in the design, so the same code yields one column on
 /// an iPhone, and more wherever there is room for them.
 enum ArticleListLayoutFactory {
-    static func makeLayout(for mode: ArticleListLayoutMode) -> UICollectionViewLayout {
+    static let footerElementKind = "ArticleListFooterKind"
+
+    static func makeLayout(for mode: ArticleListLayoutMode, hasFooter: Bool = false) -> UICollectionViewLayout {
         UICollectionViewCompositionalLayout { _, environment in
             let metrics = Metrics(mode: mode)
             let inset = AppMetrics.List.horizontalInset
@@ -42,9 +44,23 @@ enum ArticleListLayoutFactory {
             section.contentInsets = NSDirectionalEdgeInsets(
                 top: 0,
                 leading: inset,
-                bottom: AppMetrics.List.bottomInset,
+                bottom: hasFooter ? 8 : AppMetrics.List.bottomInset,
                 trailing: inset
             )
+
+            if hasFooter {
+                let footerSize = NSCollectionLayoutSize(
+                    widthDimension: .fractionalWidth(1.0),
+                    heightDimension: .absolute(56)
+                )
+                let footer = NSCollectionLayoutBoundarySupplementaryItem(
+                    layoutSize: footerSize,
+                    elementKind: footerElementKind,
+                    alignment: .bottom
+                )
+                section.boundarySupplementaryItems = [footer]
+            }
+
             return section
         }
     }

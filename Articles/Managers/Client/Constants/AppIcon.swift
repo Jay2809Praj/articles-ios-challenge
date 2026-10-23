@@ -13,6 +13,29 @@ enum AppIcon {
     static let favoriteRemove = image(named: "IconFavoriteRemove")
     static let imagePlaceholder = image(named: "ImagePlaceholder")
 
+    private static let cardSavedIcon = makeFavoriteIcon(isSaved: true, size: CGSize(width: 20, height: 16.5))
+    private static let cardUnsavedIcon = makeFavoriteIcon(isSaved: false, size: CGSize(width: 20, height: 16.5))
+    private static let gridSavedIcon = makeFavoriteIcon(isSaved: true, size: CGSize(width: 16, height: 13.5))
+    private static let gridUnsavedIcon = makeFavoriteIcon(isSaved: false, size: CGSize(width: 16, height: 13.5))
+
+    /// Returns a pre-rendered, cached template image of the favorite icon so it fits cleanly
+    /// inside circular buttons without touching or being clipped by the edges.
+    static func favoriteIcon(isSaved: Bool, size: CGSize = CGSize(width: 20, height: 16.5)) -> UIImage {
+        if size.width <= 16 {
+            return isSaved ? gridSavedIcon : gridUnsavedIcon
+        } else {
+            return isSaved ? cardSavedIcon : cardUnsavedIcon
+        }
+    }
+
+    private static func makeFavoriteIcon(isSaved: Bool, size: CGSize) -> UIImage {
+        let raw = isSaved ? favoriteRemove : favoriteAdd
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { _ in
+            raw.draw(in: CGRect(origin: .zero, size: size))
+        }.withRenderingMode(.alwaysTemplate)
+    }
+
     /// Asset and SF Symbol names, for the SwiftUI side.
     enum Name {
         static let offline = "IconOffline"

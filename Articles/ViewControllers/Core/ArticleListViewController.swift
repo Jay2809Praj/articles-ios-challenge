@@ -9,6 +9,7 @@ final class ArticleListViewController: UIViewController {
 
     private let articlesManager: ArticlesManagerProtocol
     private let connectivityManager: ConnectivityManagerProtocol
+    private let favoritesManager: FavoritesManagerProtocol
     private weak var router: ArticleRouting?
 
     private let dataSource = ArticleListDataSource()
@@ -22,8 +23,14 @@ final class ArticleListViewController: UIViewController {
     private var latestResult: ArticlesLoadResult?
     private var searchQuery = ""
     private var layoutMode: ArticleListLayoutMode = .list
+    private(set) var currentFilter: ArticleListSectionFilter = .all
+    private(set) var displayedPageCount: Int = 1
+    private(set) var isLoadingNextPage = false
+    private var pagingTask: Task<Void, Never>?
+    private var currentHasFooter = false
     private var loadTask: Task<Void, Never>?
     private var connectivityObservation: ConnectivityObservation?
+    private var savedObserver: NSObjectProtocol?
 
     override var preferredStatusBarStyle: UIStatusBarStyle { .darkContent }
 
@@ -33,10 +40,12 @@ final class ArticleListViewController: UIViewController {
         coder: NSCoder,
         articlesManager: ArticlesManagerProtocol,
         connectivityManager: ConnectivityManagerProtocol,
+        favoritesManager: FavoritesManagerProtocol,
         router: ArticleRouting
     ) {
         self.articlesManager = articlesManager
         self.connectivityManager = connectivityManager
+        self.favoritesManager = favoritesManager
         self.router = router
         super.init(coder: coder)
     }
@@ -48,14 +57,20 @@ final class ArticleListViewController: UIViewController {
 
     deinit {
         loadTask?.cancel()
+        pagingTask?.cancel()
+        if let savedObserver {
+            NotificationCenter.default.removeObserver(savedObserver)
+        }
     }
 
     override func viewDidLoad() {
         super.viewDidLoad()
         configureCollectionView()
         headerView.delegate = self
+        headerView.updateSavedCount(favoritesManager.savedArticles().count)
         embed(stateController, in: stateContainer)
         observeConnectivity()
+        observeSavedArticles()
         observeDynamicType()
 
         // Paint the cached list immediately, then refresh it in the background.
@@ -72,6 +87,8 @@ final class ArticleListViewController: UIViewController {
     private func configureCollectionView() {
         dataSource.registerCells(in: collectionView)
         dataSource.onReadMore = { [weak self] article in self?.open(article) }
+        dataSource.isSaved = { [weak self] article in self?.favoritesManager.isSaved(article) ?? false }
+        dataSource.onToggleSave = { [weak self] article in self?.favoritesManager.toggleSave(article) }
 
         collectionView.dataSource = dataSource
         collectionView.delegate = self
@@ -80,6 +97,37 @@ final class ArticleListViewController: UIViewController {
         refreshControl.tintColor = AppColor.accent
         refreshControl.addTarget(self, action: #selector(refreshPulled), for: .valueChanged)
         collectionView.refreshControl = refreshControl
+    }
+
+    private func observeSavedArticles() {
+        savedObserver = NotificationCenter.default.addObserver(
+            forName: AppConstants.SavedArticles.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            self.headerView.updateSavedCount(self.favoritesManager.savedArticles().count)
+            if self.currentFilter == .saved {
+                self.render()
+            } else {
+                self.updateVisibleSavedStates()
+            }
+        }
+    }
+
+    private func updateVisibleSavedStates() {
+        guard let collectionView else { return }
+        for cell in collectionView.visibleCells {
+            if let cardCell = cell as? ArticleCardCell,
+               let indexPath = collectionView.indexPath(for: cardCell),
+               let article = dataSource.article(at: indexPath) {
+                cardCell.updateSavedState(favoritesManager.isSaved(article))
+            } else if let gridCell = cell as? ArticleGridCell,
+                      let indexPath = collectionView.indexPath(for: gridCell),
+                      let article = dataSource.article(at: indexPath) {
+                gridCell.updateSavedState(favoritesManager.isSaved(article))
+            }
+        }
     }
 
     private func observeConnectivity() {
@@ -96,7 +144,16 @@ final class ArticleListViewController: UIViewController {
 
     // MARK: - Loading
 
+    private func resetPagination() {
+        pagingTask?.cancel()
+        pagingTask = nil
+        displayedPageCount = 1
+        isLoadingNextPage = false
+        dataSource.isLoadingMore = false
+    }
+
     @objc private func refreshPulled() {
+        resetPagination()
         loadArticles()
     }
 
@@ -117,6 +174,7 @@ final class ArticleListViewController: UIViewController {
         latestResult = result
         articles = result.articles
         refreshControl.endRefreshing()
+        resetPagination()
         render()
         reportFailureIfNeeded(of: result)
     }
@@ -124,6 +182,7 @@ final class ArticleListViewController: UIViewController {
     /// When a refresh fails but saved articles are on screen, say so without
     /// taking the content away.
     private func reportFailureIfNeeded(of result: ArticlesLoadResult) {
+        guard currentFilter == .all else { return }
         guard let error = result.error, !result.articles.isEmpty else {
             bannerPresenter.unpin()
             return
@@ -148,6 +207,9 @@ final class ArticleListViewController: UIViewController {
             bannerPresenter.unpin()
             bannerPresenter.toast(.backOnline)
             loadArticles()
+        } else if currentFilter == .saved {
+            // Saved articles remain 100% accessible offline
+            render()
         } else if articles.isEmpty {
             render()
         } else {
@@ -157,16 +219,41 @@ final class ArticleListViewController: UIViewController {
 
     // MARK: - Rendering
 
+    private var totalFilteredArticles: [Article] {
+        let baseArticles = currentFilter == .saved ? favoritesManager.savedArticles() : articles
+        return ArticleSearchFilter.filter(baseArticles, matching: searchQuery)
+    }
+
+    private var hasMorePages: Bool {
+        ArticlePaginator.hasMorePages(
+            totalCount: totalFilteredArticles.count,
+            page: displayedPageCount
+        )
+    }
+
     private var visibleArticles: [Article] {
-        ArticleSearchFilter.filter(articles, matching: searchQuery)
+        ArticlePaginator.paginate(
+            totalFilteredArticles,
+            page: displayedPageCount
+        )
     }
 
     private func render() {
         let visible = visibleArticles
         dataSource.articles = visible
+
+        let needsFooter = hasMorePages
+        if needsFooter != currentHasFooter {
+            currentHasFooter = needsFooter
+            collectionView.setCollectionViewLayout(
+                ArticleListLayoutFactory.makeLayout(for: layoutMode, hasFooter: needsFooter),
+                animated: false
+            )
+        }
+
         collectionView.reloadData()
 
-        if let state = currentState(visibleCount: visible.count) {
+        if let state = currentState(visibleCount: totalFilteredArticles.count) {
             stateController.show(state)
             setStateVisible(true)
         } else {
@@ -174,8 +261,42 @@ final class ArticleListViewController: UIViewController {
         }
     }
 
+    private func loadNextPageIfNeeded() {
+        guard hasMorePages, !isLoadingNextPage else { return }
+        isLoadingNextPage = true
+        dataSource.isLoadingMore = true
+
+        if let footer = collectionView.supplementaryView(
+            forElementKind: ArticleListLayoutFactory.footerElementKind,
+            at: IndexPath(item: 0, section: 0)
+        ) as? LoadingFooterView {
+            footer.startAnimating()
+        }
+
+        pagingTask?.cancel()
+        pagingTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(AppConstants.Pagination.simulatedLoadDelay * 1_000_000_000))
+            guard let self, !Task.isCancelled, self.isLoadingNextPage else { return }
+            self.displayedPageCount += 1
+            self.isLoadingNextPage = false
+            self.dataSource.isLoadingMore = false
+            self.render()
+        }
+    }
+
     /// The full-area state to show instead of the list, or `nil` for content.
     private func currentState(visibleCount: Int) -> ContentStateView.Kind? {
+        if currentFilter == .saved {
+            let saved = favoritesManager.savedArticles()
+            if saved.isEmpty {
+                return .emptySaved
+            }
+            if visibleCount == 0 && !searchQuery.isEmpty {
+                return .noResults(query: searchQuery)
+            }
+            return nil
+        }
+
         guard articles.isEmpty else {
             return visibleCount == 0 ? .noResults(query: searchQuery) : nil
         }
@@ -233,6 +354,16 @@ extension ArticleListViewController: UICollectionViewDelegate {
         guard let article = dataSource.article(at: indexPath) else { return }
         open(article)
     }
+
+    func collectionView(
+        _ collectionView: UICollectionView,
+        willDisplay cell: UICollectionViewCell,
+        forItemAt indexPath: IndexPath
+    ) {
+        let count = dataSource.articles.count
+        guard count > 0, indexPath.item >= count - 1 else { return }
+        loadNextPageIfNeeded()
+    }
 }
 
 // MARK: - ArticleListHeaderViewDelegate
@@ -246,7 +377,7 @@ extension ArticleListViewController: ArticleListHeaderViewDelegate {
         UIView.transition(with: collectionView, duration: 0.3, options: .transitionCrossDissolve) {
             self.collectionView.reloadData()
             self.collectionView.setCollectionViewLayout(
-                ArticleListLayoutFactory.makeLayout(for: self.layoutMode),
+                ArticleListLayoutFactory.makeLayout(for: self.layoutMode, hasFooter: self.currentHasFooter),
                 animated: false
             )
             self.collectionView.setContentOffset(.zero, animated: false)
@@ -254,12 +385,27 @@ extension ArticleListViewController: ArticleListHeaderViewDelegate {
     }
 
     func headerView(_ headerView: ArticleListHeaderView, didChangeSearchText text: String) {
+        resetPagination()
         searchQuery = text
         render()
     }
 
     func headerViewDidEndSearch(_ headerView: ArticleListHeaderView) {
+        resetPagination()
         searchQuery = ""
+        render()
+    }
+
+    func headerView(_ headerView: ArticleListHeaderView, didSelectFilter filter: ArticleListSectionFilter) {
+        guard currentFilter != filter else { return }
+        currentFilter = filter
+        refreshControl.isEnabled = (filter == .all)
+        resetPagination()
+        if filter == .saved {
+            bannerPresenter.unpin()
+        } else if !connectivityManager.isOnline && !articles.isEmpty {
+            bannerPresenter.pin(.offline(savedAgo: savedAgo(for: latestResult)))
+        }
         render()
     }
 }
