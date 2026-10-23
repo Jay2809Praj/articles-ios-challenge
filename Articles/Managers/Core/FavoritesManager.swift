@@ -31,8 +31,9 @@ struct SavedArticleRecord: Codable, Equatable {
 ///
 /// Articles are persisted with their full text content and cached image data so that
 /// they remain 100% available offline even after force quitting and relaunching the app.
-/// A strict 50 MB storage limit is enforced using a Least-Recently-Used (LRU) / oldest-first
-/// eviction strategy.
+/// A strict 50 MB storage limit is enforced using an oldest-saved-first eviction strategy.
+/// The budget is re-enforced whenever asynchronous image downloads complete, ensuring
+/// the total never exceeds the limit even when image sizes are updated post-save.
 final class FavoritesManager: FavoritesManagerProtocol {
     private let storage: Storage<String, [SavedArticleRecord]>?
     private let defaults: UserDefaults
@@ -163,11 +164,11 @@ final class FavoritesManager: FavoritesManagerProtocol {
 
     // MARK: - Internal Helpers
 
-    private func enforceLimit(freeing neededBytes: Int64) {
+    private func enforceLimit(freeing neededBytes: Int64 = 0) {
         var currentTotal = records.reduce(0) { $0 + $1.totalByteSize }
 
         while currentTotal + neededBytes > storageLimitBytes && !records.isEmpty {
-            // Evict oldest saved article (LRU)
+            // Evict oldest saved article first
             guard let (oldestIndex, oldestRecord) = records.enumerated().min(by: { $0.element.savedAt < $1.element.savedAt }) else {
                 break
             }
@@ -175,6 +176,19 @@ final class FavoritesManager: FavoritesManagerProtocol {
             currentTotal -= oldestRecord.totalByteSize
             cleanupImage(for: oldestRecord.article)
             logger.info("Evicted oldest saved article '\(oldestRecord.article.title ?? "")' to stay within 50MB limit")
+        }
+    }
+
+    /// Removes a single record whose total size alone exceeds the storage limit.
+    /// This handles the edge case where an article's image download completes and
+    /// pushes the individual record over the entire budget.
+    private func evictOversizedRecord(identifier: String) {
+        guard let index = records.firstIndex(where: { $0.article.identifier == identifier }) else { return }
+        let record = records[index]
+        if record.totalByteSize > storageLimitBytes {
+            records.remove(at: index)
+            cleanupImage(for: record.article)
+            logger.warning("Removed article '\(record.article.title ?? "")' because its total size (\(record.totalByteSize) bytes) exceeds the \(storageLimitBytes) byte limit")
         }
     }
 
@@ -220,7 +234,15 @@ final class FavoritesManager: FavoritesManagerProtocol {
 
         guard let index = records.firstIndex(where: { $0.article.identifier == identifier }) else { return }
         records[index].imageByteSize = size
+
+        // Re-enforce storage limit now that the true image size is known.
+        // First check if this single record exceeds the entire budget.
+        evictOversizedRecord(identifier: identifier)
+        // Then ensure the overall total is still within limits.
+        enforceLimit()
+
         persistRecords()
+        notifyChange()
     }
 
     private func cleanupImage(for article: Article) {

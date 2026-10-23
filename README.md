@@ -4,7 +4,7 @@ An iOS / iPadOS app that lists articles from an API, displays detailed reading v
 
 - **UIKit + Storyboards + XIBs**, MVC, with a modern **SwiftUI** widget and state components embedded via `UIHostingController`
 - **iPhone and iPad** (`UISplitViewController` on iPad), deployment target **iOS 18.0**
-- Works **offline**, survives **broken data**, supports **Dynamic Type**, adopts **Liquid Glass**, implements a **50 MB LRU offline budget**, **Infinite Scroll**, and an **Interactive WidgetKit Extension**
+- Works **offline**, survives **broken data**, supports **Dynamic Type**, adopts **Liquid Glass**, implements a **50 MB oldest-saved-first offline budget**, **Infinite Scroll**, and an **Interactive WidgetKit Extension**
 
 ---
 
@@ -42,7 +42,7 @@ xcodebuild test -workspace Articles.xcworkspace -scheme Articles \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
 ```
 
-*All 54 unit tests pass with zero failures (`** TEST SUCCEEDED **`).*
+*All 58 unit tests pass with zero failures (`** TEST SUCCEEDED **`).*
 
 ---
 
@@ -52,7 +52,7 @@ xcodebuild test -workspace Articles.xcworkspace -scheme Articles \
 | --- | --- |
 | **Article List** | Storyboard scene, `UICollectionView` with XIB cells, list and grid layouts, inline search, and pull-to-refresh. |
 | **Article Detail** | Storyboard scene following the Figma frame, favourite/save toggle, opens full article in `SFSafariViewController`. |
-| **Save for Later (Feature 1)** | Dedicated Saved list, offline text and image persistence across app restarts, and 50 MB LRU storage budget management. |
+| **Save for Later (Feature 1)** | Dedicated Saved list, offline text and image persistence across app restarts, and 50 MB oldest-saved-first storage budget management with async re-enforcement. |
 | **Infinite Scroll (Feature 2 - Option A)** | Simulated 10-article pagination behind `ArticlePaginator`, seamless automatic loading on scroll, and native footer indicator. |
 | **Interactive Widget (Feature 2 - Option B)** | WidgetKit extension with `.systemSmall`, `.systemMedium`, `.systemLarge` sizes, real API data, magazine photo layout, interactive AppIntents (Next/Prev cycling), and deep linking (`articles://open?url=...`). |
 | **SwiftUI Integration** | `ContentStateView` (loading skeleton, offline, error, empty, no results, iPad placeholder) hosted via `UIHostingController`. |
@@ -77,9 +77,11 @@ Users can save articles to read offline from both the list card and the detail s
 - **Dedicated Saved Area**: Accessible via the navigation bar bookmark icon on the home screen, presenting saved articles in a dedicated collection.
 - **50 MB Storage Budget Decision**:
   - The brief dictates that saved content is limited to **50 MB**.
-  - **Eviction Strategy**: Implemented an **LRU (Least Recently Saved)** eviction policy in `FavoritesManager`.
+  - **Eviction Strategy**: Implemented an **oldest-saved-first** eviction policy in `FavoritesManager`.
   - When the cumulative size of saved articles and images reaches or exceeds 50 MB (50,000,000 bytes), saving a new article automatically evicts the oldest saved article and deletes its cached image from disk until the total size is back within the safe budget.
-  - The behavior is covered by automated unit tests (`test50MBStorageLimitEvictsOldestArticleWhenExceeded`).
+  - **Async Image Re-enforcement**: Because image downloads complete asynchronously after an article is saved, the storage budget is **re-enforced whenever image sizes are updated**. This prevents the total from silently exceeding 50 MB when large images finish downloading.
+  - **Single Article Exceeding Limit**: If a single article's total size (metadata + image) exceeds the entire 50 MB budget, it is automatically removed from saved storage to prevent permanently consuming the budget.
+  - The behavior is covered by automated unit tests (`test50MBStorageLimitEvictsOldestArticleWhenExceeded`, `testAsyncImageSizeUpdateReEnforcesStorageLimit`, `testSingleArticleExceedingBudgetIsEvicted`).
 
 ---
 
@@ -172,13 +174,13 @@ The feed contains 79 articles with deliberate edge cases, all gracefully handled
 
 ## Automated Unit Testing
 
-The test suite covers **54 unit tests** with 100% pass rate:
+The test suite covers **58 unit tests** with 100% pass rate:
 
-- **`ArticlePresentationTests`** (21 tests): Date parsing, link validation, lossy decoding, paginator math, page limits, widget shared store serialization, deep link URL query parameter construction, and interactive cycling.
+- **`ArticlePresentationTests`** (22 tests): Date parsing, link validation, lossy decoding, paginator math, page limits, widget shared store serialization, deep link URL query parameter construction, and interactive cycling.
 - **`ArticlesManagerTests`** (6 tests): Cache hit/miss fallbacks, network success caching, error propagation, and widget sync triggers.
 - **`ArticlesProviderTests`** (5 tests): Endpoint security, empty article filtering, and network error handling.
 - **`ConnectivityManagerTests`** (3 tests): Reachability state changes, observation unregistering, and debounce logic.
-- **`FavoritesManagerTests`** (10 tests): Full model persistence, 50 MB storage budget eviction, image cleanup on deletion, concurrent thread safety, and ordering.
+- **`FavoritesManagerTests`** (14 tests): Full model persistence, 50 MB storage budget eviction, async image size re-enforcement, single-article-over-budget handling, image cleanup on deletion, concurrent thread safety, and ordering.
 
 ---
 

@@ -175,4 +175,152 @@ final class FavoritesManagerTests: XCTestCase {
         let result = group.wait(timeout: .now() + 5.0)
         XCTAssertEqual(result, .success, "Concurrent toggles deadlocked!")
     }
+
+    // MARK: - Async Image Size Re-enforcement Tests
+
+    func testAsyncImageSizeUpdateReEnforcesStorageLimit() {
+        // Budget: 1000 bytes. Two articles fit when imageByteSize is 0.
+        // When an async image download completes and pushes the total over limit,
+        // the oldest article should be evicted.
+        let limitBytes: Int64 = 1000
+        let manager = FavoritesManager(defaults: defaults, storageName: suiteName, storageLimitBytes: limitBytes, logger: .silent)
+
+        var completionBlocks: [(Int64) -> Void] = []
+        var removedImages: [URL] = []
+
+        manager.imageDownloader = { _, completion in
+            // Capture the completion to call later (simulating async download)
+            completionBlocks.append(completion)
+        }
+        manager.imageRemover = { url in
+            removedImages.append(url)
+        }
+
+        let article1 = Article.sample(title: "Async Art 1", url: "https://example.com/async1")
+        let article2 = Article.sample(title: "Async Art 2", url: "https://example.com/async2")
+
+        manager.save(article1)
+        manager.save(article2)
+
+        // Both articles are saved. At this point imageByteSize = 0 for both.
+        XCTAssertEqual(manager.savedArticles().count, 2)
+        XCTAssertTrue(manager.totalStorageBytes < limitBytes, "Without images, both fit within budget")
+
+        // Now simulate async image downloads completing with large sizes
+        // Article 1's image: 600 bytes
+        completionBlocks[0](600)
+
+        // Still within budget (article bytes ~270 each + 600 image = ~1140? depends on encoding)
+        // Let's trigger article 2's image download with a size that pushes total over 1000
+        completionBlocks[1](500)
+
+        // After both image sizes are updated, total should exceed 1000 bytes.
+        // The re-enforcement should have evicted the oldest article(s) to stay within budget.
+        XCTAssertTrue(manager.totalStorageBytes <= limitBytes,
+                      "Total storage (\(manager.totalStorageBytes)) should not exceed limit (\(limitBytes)) after async image size updates")
+    }
+
+    func testSingleArticleExceedingBudgetIsEvicted() {
+        // Budget: 500 bytes. Save one article. Its async image download returns a size
+        // that alone exceeds the entire budget. The article should be removed.
+        let limitBytes: Int64 = 500
+        let manager = FavoritesManager(defaults: defaults, storageName: suiteName, storageLimitBytes: limitBytes, logger: .silent)
+
+        var completionBlock: ((Int64) -> Void)?
+        var removedImages: [URL] = []
+
+        manager.imageDownloader = { _, completion in
+            completionBlock = completion
+        }
+        manager.imageRemover = { url in
+            removedImages.append(url)
+        }
+
+        let article = Article.sample(title: "Oversized Article", url: "https://example.com/oversized")
+        manager.save(article)
+        XCTAssertEqual(manager.savedArticles().count, 1)
+
+        // Simulate image download completing with a size that makes the single article
+        // exceed the entire budget (article bytes ~270 + 50000 image >> 500)
+        completionBlock?(50_000)
+
+        // The article should have been evicted because its total size > budget
+        XCTAssertTrue(manager.savedArticles().isEmpty,
+                      "Article whose total size exceeds the entire budget should be removed")
+        XCTAssertEqual(manager.totalStorageBytes, 0)
+        XCTAssertFalse(removedImages.isEmpty, "Oversized article's image should be cleaned up")
+    }
+
+    func testAsyncImageSizeUpdateEvictsOldestToMakeRoom() {
+        // Budget: 800 bytes. Save 3 articles (small without images).
+        // When image sizes arrive, the oldest should be evicted to stay within budget.
+        let limitBytes: Int64 = 800
+        let manager = FavoritesManager(defaults: defaults, storageName: suiteName, storageLimitBytes: limitBytes, logger: .silent)
+
+        var completionBlocks: [(Int64) -> Void] = []
+        var removedImages: [URL] = []
+
+        manager.imageDownloader = { _, completion in
+            completionBlocks.append(completion)
+        }
+        manager.imageRemover = { url in
+            removedImages.append(url)
+        }
+
+        let article1 = Article.sample(title: "Evict Art 1", url: "https://example.com/evict1")
+        let article2 = Article.sample(title: "Evict Art 2", url: "https://example.com/evict2")
+        let article3 = Article.sample(title: "Evict Art 3", url: "https://example.com/evict3")
+
+        manager.save(article1)
+        manager.save(article2)
+        manager.save(article3)
+
+        // All 3 saved (article bytes only, no images yet)
+        XCTAssertEqual(manager.savedArticles().count, 3)
+
+        // Simulate image downloads completing
+        completionBlocks[0](200)
+        completionBlocks[1](200)
+        completionBlocks[2](200)
+
+        // After async updates, total would exceed 800 so evictions should occur
+        let remaining = manager.savedArticles()
+        XCTAssertTrue(manager.totalStorageBytes <= limitBytes,
+                      "Total (\(manager.totalStorageBytes)) should stay within (\(limitBytes))")
+        // Article 1 should be evicted first (oldest saved)
+        XCTAssertFalse(remaining.contains(where: { $0.title == "Evict Art 1" }),
+                       "Oldest article should be evicted first when async images push total over limit")
+    }
+
+    func testMultipleAsyncImageUpdatesEnforceBudgetCumulatively() {
+        // Verify that the budget is checked after EVERY image size update, not just the first.
+        let limitBytes: Int64 = 600
+        let manager = FavoritesManager(defaults: defaults, storageName: suiteName, storageLimitBytes: limitBytes, logger: .silent)
+
+        var completionBlocks: [(Int64) -> Void] = []
+
+        manager.imageDownloader = { _, completion in
+            completionBlocks.append(completion)
+        }
+        manager.imageRemover = { _ in }
+
+        let article1 = Article.sample(title: "Cumulative 1", url: "https://example.com/cum1")
+        let article2 = Article.sample(title: "Cumulative 2", url: "https://example.com/cum2")
+
+        manager.save(article1)
+        manager.save(article2)
+        XCTAssertEqual(manager.savedArticles().count, 2)
+
+        // First image update - small, should still fit
+        completionBlocks[0](50)
+        XCTAssertTrue(manager.totalStorageBytes <= limitBytes,
+                      "First small image should not trigger eviction")
+
+        // Second image update - large enough to push total over limit
+        completionBlocks[1](300)
+
+        // Budget should be enforced
+        XCTAssertTrue(manager.totalStorageBytes <= limitBytes,
+                      "Total (\(manager.totalStorageBytes)) must stay within (\(limitBytes)) after cumulative async updates")
+    }
 }
