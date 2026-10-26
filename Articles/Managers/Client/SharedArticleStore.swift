@@ -185,7 +185,7 @@ final class SharedArticleStore {
         }
     }
 
-    private func setCurrentIndex(_ index: Int) {
+    func setCurrentIndex(_ index: Int) {
         guard let directoryURL, let data = try? encoder.encode(State(currentIndex: index)) else { return }
         ensureDirectoryExists()
         try? data.write(to: directoryURL.appendingPathComponent(Self.stateFileName), options: .atomic)

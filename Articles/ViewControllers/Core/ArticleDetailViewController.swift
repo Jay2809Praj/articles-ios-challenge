@@ -21,6 +21,7 @@ final class ArticleDetailViewController: UIViewController {
     private let article: Article
     private let display: ArticleDisplay
     private let favoritesManager: FavoritesManagerProtocol
+    private let widgetSync: WidgetSyncManagerProtocol?
     private weak var router: ArticleRouting?
     private lazy var bannerPresenter = BannerPresenter(hostView: view, above: readFullArticleButton)
     private var savedObserver: NSObjectProtocol?
@@ -41,11 +42,13 @@ final class ArticleDetailViewController: UIViewController {
         coder: NSCoder,
         article: Article,
         favoritesManager: FavoritesManagerProtocol,
+        widgetSync: WidgetSyncManagerProtocol? = nil,
         router: ArticleRouting
     ) {
         self.article = article
         self.display = ArticleDisplay(article: article)
         self.favoritesManager = favoritesManager
+        self.widgetSync = widgetSync
         self.router = router
         super.init(coder: coder)
     }
@@ -68,6 +71,7 @@ final class ArticleDetailViewController: UIViewController {
         renderFavoriteState(animated: false)
         observeSavedArticles()
         articleImageView.setImage(with: display.imageURL)
+        widgetSync?.updateLastOpenedArticle(article)
 
         registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: Self, _) in
             self.renderText()

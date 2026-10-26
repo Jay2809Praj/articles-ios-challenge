@@ -87,6 +87,7 @@ extension Article {
 final class MockWidgetSyncManager: WidgetSyncManagerProtocol {
     private(set) var latestUpdates: [[Article]] = []
     private(set) var savedUpdates: [[Article]] = []
+    private(set) var lastOpenedUpdates: [Article] = []
 
     func updateLatestArticles(_ articles: [Article]) {
         latestUpdates.append(articles)
@@ -94,6 +95,10 @@ final class MockWidgetSyncManager: WidgetSyncManagerProtocol {
 
     func updateSavedArticles(_ articles: [Article]) {
         savedUpdates.append(articles)
+    }
+
+    func updateLastOpenedArticle(_ article: Article) {
+        lastOpenedUpdates.append(article)
     }
 }
 

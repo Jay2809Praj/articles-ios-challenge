@@ -2,7 +2,9 @@
 import XCTest
 
 final class WidgetSyncManagerTests: XCTestCase {
+    private let suiteName = "WidgetSyncManagerTests"
     private var store: SharedArticleStore!
+    private var defaults: UserDefaults!
     private var downloads: [URL] = []
     private var downloadCompletions: [(Data?) -> Void] = []
     private var reloadCount = 0
@@ -11,23 +13,32 @@ final class WidgetSyncManagerTests: XCTestCase {
     override func setUp() {
         super.setUp()
         store = .temporary()
+        defaults = UserDefaults(suiteName: suiteName)
+        defaults.removePersistentDomain(forName: suiteName)
         downloads = []
         downloadCompletions = []
         reloadCount = 0
-        manager = WidgetSyncManager(
+        manager = makeManager()
+    }
+
+    override func tearDown() {
+        store.clear()
+        defaults.removePersistentDomain(forName: suiteName)
+        super.tearDown()
+    }
+
+    private func makeManager() -> WidgetSyncManager {
+        WidgetSyncManager(
             store: store,
+            defaults: defaults,
             imageDownloader: { [weak self] url, completion in
                 self?.downloads.append(url)
                 self?.downloadCompletions.append(completion)
             },
             reloadWidgets: { [weak self] in self?.reloadCount += 1 },
+            publishDelay: 0.01,
             logger: .silent
         )
-    }
-
-    override func tearDown() {
-        store.clear()
-        super.tearDown()
     }
 
     /// Lets the manager's serial queue drain.
@@ -149,8 +160,10 @@ final class WidgetSyncManagerTests: XCTestCase {
         var reloads = 0
         let inert = WidgetSyncManager(
             store: SharedArticleStore(containerURL: nil),
+            defaults: defaults,
             imageDownloader: { _, _ in XCTFail("No downloads without a container") },
             reloadWidgets: { reloads += 1 },
+            publishDelay: 0.01,
             logger: .silent
         )
 
@@ -158,6 +171,113 @@ final class WidgetSyncManagerTests: XCTestCase {
         settle()
 
         XCTAssertEqual(reloads, 0)
+    }
+
+    // MARK: - Last opened article
+
+    func testLastOpenedComesFirstThenSavedThenLatest() {
+        let opened = article(3)
+        let result = WidgetSyncManager.widgetArticles(
+            latest: [article(1), article(2), opened],
+            saved: [article(2)],
+            lastOpened: opened
+        )
+
+        XCTAssertEqual(result.map(\.title), ["Article 3", "Article 2", "Article 1"])
+        XCTAssertEqual(result.map(\.isSaved), [false, true, false])
+    }
+
+    func testLastOpenedSavedArticleIsFlaggedAsSaved() {
+        let opened = article(2)
+        let result = WidgetSyncManager.widgetArticles(latest: [article(1)], saved: [opened], lastOpened: opened)
+
+        XCTAssertEqual(result.map(\.title), ["Article 2", "Article 1"])
+        XCTAssertEqual(result.first?.isSaved, true)
+    }
+
+    func testOpeningAnArticlePutsItFirstAndResetsTheBrowseIndex() {
+        manager.updateLatestArticles([article(1), article(2), article(3)])
+        settle()
+        store.cycleToNextArticle()
+        store.cycleToNextArticle()
+        XCTAssertEqual(store.currentIndex(), 2)
+
+        manager.updateLastOpenedArticle(article(3))
+        settle()
+
+        XCTAssertEqual(store.loadArticles().map(\.title), ["Article 3", "Article 1", "Article 2"])
+        XCTAssertEqual(store.currentArticle()?.article.title, "Article 3")
+        XCTAssertEqual(store.currentIndex(), 0)
+    }
+
+    func testRefreshingTheListKeepsTheBrowseIndex() {
+        manager.updateLatestArticles([article(1), article(2), article(3)])
+        settle()
+        store.cycleToNextArticle()
+
+        manager.updateLatestArticles([article(1), article(2), article(3), article(4)])
+        settle()
+
+        XCTAssertEqual(store.currentIndex(), 1, "Only opening an article moves the widget; a refresh must not")
+    }
+
+    func testOpeningTheSameArticleAgainDoesNotRepublish() {
+        manager.updateLatestArticles([article(1)])
+        manager.updateLastOpenedArticle(article(1))
+        settle()
+        XCTAssertEqual(reloadCount, 1)
+
+        manager.updateLastOpenedArticle(article(1))
+        settle()
+
+        XCTAssertEqual(reloadCount, 1)
+    }
+
+    func testLastOpenedArticleSurvivesARelaunch() {
+        manager.updateLastOpenedArticle(article(7))
+        settle()
+
+        // A new manager, as after the app was killed and launched again.
+        downloads = []
+        reloadCount = 0
+        let relaunched = makeManager()
+        relaunched.updateLatestArticles([article(1), article(2)])
+        settle()
+
+        XCTAssertEqual(store.loadArticles().map(\.title), ["Article 7", "Article 1", "Article 2"])
+    }
+
+    // MARK: - Coalescing launch-time updates
+
+    func testBurstOfUpdatesPublishesOnceWithTheCompleteList() {
+        manager.updateSavedArticles([article(2)])
+        manager.updateLatestArticles([article(1), article(2), article(3)])
+        settle()
+
+        XCTAssertEqual(reloadCount, 1, "Saved and latest arriving together must produce one publish")
+        XCTAssertEqual(store.loadArticles().map(\.title), ["Article 2", "Article 1", "Article 3"])
+        XCTAssertEqual(downloads.count, 3)
+    }
+
+    func testRelaunchDoesNotPruneImagesOrResetTheIndex() {
+        manager.updateLatestArticles([article(1), article(2)])
+        settle()
+        downloadCompletions.forEach { $0(Data("jpeg".utf8)) }
+        settle()
+        store.cycleToNextArticle()
+        XCTAssertTrue(store.hasImage(for: article(2).identifier))
+
+        // On launch the favourites manager reports first, then the articles manager.
+        let relaunched = makeManager()
+        downloads = []
+        relaunched.updateSavedArticles([article(1)])
+        relaunched.updateLatestArticles([article(1), article(2)])
+        settle()
+
+        XCTAssertTrue(store.hasImage(for: article(1).identifier))
+        XCTAssertTrue(store.hasImage(for: article(2).identifier), "A partial list must not delete images of articles still listed")
+        XCTAssertTrue(downloads.isEmpty, "Nothing is downloaded again")
+        XCTAssertEqual(store.currentIndex(), 1)
     }
 
     // MARK: - Image downsampling

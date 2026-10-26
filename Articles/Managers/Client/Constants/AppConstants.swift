@@ -24,6 +24,10 @@ enum AppConstants {
         static let didChangeNotification = Notification.Name("SavedArticlesDidChangeNotification")
     }
 
+    enum Widget {
+        static let lastOpenedArticleKey = "widget.lastOpenedArticle"
+    }
+
     enum Pagination {
         static let pageSize = 10
         static let simulatedLoadDelay: TimeInterval = 0.8
