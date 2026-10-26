@@ -105,7 +105,10 @@ private extension AppDelegate {
         .inObjectScope(.container)
 
         container.register(FavoritesManagerProtocol.self) { resolver in
-            FavoritesManager(widgetSync: resolver.resolve(WidgetSyncManagerProtocol.self))
+            FavoritesManager(
+                storageLimitBytes: AppConstants.SavedArticles.storageLimitBytes(),
+                widgetSync: resolver.resolve(WidgetSyncManagerProtocol.self)
+            )
         }
         .inObjectScope(.container)
     }

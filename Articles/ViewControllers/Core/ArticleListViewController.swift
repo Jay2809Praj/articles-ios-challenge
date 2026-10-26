@@ -32,6 +32,7 @@ final class ArticleListViewController: UIViewController {
     private var loadTask: Task<Void, Never>?
     private var connectivityObservation: ConnectivityObservation?
     private var savedObserver: NSObjectProtocol?
+    private var evictionObserver: NSObjectProtocol?
 
     override var preferredStatusBarStyle: UIStatusBarStyle { .darkContent }
 
@@ -62,16 +63,20 @@ final class ArticleListViewController: UIViewController {
         if let savedObserver {
             NotificationCenter.default.removeObserver(savedObserver)
         }
+        if let evictionObserver {
+            NotificationCenter.default.removeObserver(evictionObserver)
+        }
     }
 
     override func viewDidLoad() {
         super.viewDidLoad()
         configureCollectionView()
         headerView.delegate = self
-        headerView.updateSavedCount(favoritesManager.savedArticles().count)
+        updateSavedSummary()
         embed(stateController, in: stateContainer)
         observeConnectivity()
         observeSavedArticles()
+        observeEvictions()
         observeDynamicType()
 
         // Paint the cached list immediately, then refresh it in the background.
@@ -109,13 +114,35 @@ final class ArticleListViewController: UIViewController {
             queue: .main
         ) { [weak self] _ in
             guard let self else { return }
-            self.headerView.updateSavedCount(self.favoritesManager.savedArticles().count)
+            self.updateSavedSummary()
             if self.currentFilter == .saved {
                 self.render()
             } else {
                 self.updateVisibleSavedStates()
             }
         }
+    }
+
+    /// Tells the user when the 50 MB limit took saved articles away.
+    private func observeEvictions() {
+        evictionObserver = NotificationCenter.default.addObserver(
+            forName: AppConstants.SavedArticles.didEvictNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self, self.view.window != nil,
+                  let eviction = notification.userInfo?[AppConstants.SavedArticles.evictionUserInfoKey] as? SavedArticlesEviction
+            else { return }
+            self.bannerPresenter.toast(.storageLimit(eviction))
+        }
+    }
+
+    private func updateSavedSummary() {
+        headerView.updateSavedSummary(
+            count: favoritesManager.savedArticles().count,
+            usedBytes: favoritesManager.totalStorageBytes,
+            limitBytes: favoritesManager.storageLimitBytes
+        )
     }
 
     private func updateVisibleSavedStates() {
@@ -399,6 +426,7 @@ extension ArticleListViewController: ArticleListHeaderViewDelegate {
         guard currentFilter != filter else { return }
         currentFilter = filter
         refreshControl.isEnabled = (filter == .all)
+        headerView.showsStorageUsage(filter == .saved)
         if filter == .saved {
             bannerPresenter.unpin()
         } else if !connectivityManager.isOnline && !articles.isEmpty {

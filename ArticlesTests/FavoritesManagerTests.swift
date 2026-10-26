@@ -357,6 +357,92 @@ final class FavoritesManagerTests: XCTestCase {
                       "Total (\(manager.totalStorageBytes)) must stay within the limit after cumulative updates")
     }
 
+    // MARK: - Eviction notifications
+
+    private func evictions(during work: () -> Void) -> [SavedArticlesEviction] {
+        // Deliver whatever earlier steps posted before listening.
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
+        var received: [SavedArticlesEviction] = []
+        let token = NotificationCenter.default.addObserver(
+            forName: AppConstants.SavedArticles.didEvictNotification,
+            object: nil,
+            queue: .main
+        ) { notification in
+            if let eviction = notification.userInfo?[AppConstants.SavedArticles.evictionUserInfoKey] as? SavedArticlesEviction {
+                received.append(eviction)
+            }
+        }
+        defer { NotificationCenter.default.removeObserver(token) }
+
+        work()
+        // Notifications are posted asynchronously on the main queue.
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.2))
+        return received
+    }
+
+    func testEvictionReportsTheRemovedArticleTitles() {
+        let manager = makeManager(limitBytes: 600)
+        manager.save(Article.sample(title: "Oldest", url: "https://example.com/1"))
+        manager.save(Article.sample(title: "Middle", url: "https://example.com/2"))
+
+        let received = evictions {
+            manager.save(Article.sample(title: "Newest", url: "https://example.com/3"))
+        }
+
+        XCTAssertEqual(received, [SavedArticlesEviction(reason: .storageFull, titles: ["Oldest"])])
+    }
+
+    func testEvictionOfSeveralArticlesIsOneNotificationOldestFirst() {
+        let manager = makeManager(limitBytes: 900)
+        manager.save(Article.sample(title: "First", url: "https://example.com/1"))
+        manager.save(Article.sample(title: "Second", url: "https://example.com/2"))
+        manager.save(Article.sample(title: "Third", url: "https://example.com/3"))
+
+        // Three fit (~270 bytes each); a large image on the newest pushes two out.
+        let received = evictions {
+            finishDownload(2, with: Data(count: 500))
+        }
+
+        XCTAssertEqual(received.count, 1)
+        XCTAssertEqual(received.first?.reason, .storageFull)
+        XCTAssertEqual(received.first?.titles, ["First", "Second"])
+        XCTAssertEqual(manager.savedArticles().map(\.title), ["Third"])
+    }
+
+    func testOversizedArticleIsReportedAsTooLarge() {
+        let manager = makeManager(limitBytes: 500)
+        manager.save(Article.sample(title: "Giant", url: "https://example.com/giant"))
+
+        let received = evictions {
+            finishDownload(0, with: Data(count: 50_000))
+        }
+
+        XCTAssertEqual(received, [SavedArticlesEviction(reason: .articleTooLarge, titles: ["Giant"])])
+    }
+
+    func testEvictionTitleFallsBackToDescription() {
+        let manager = makeManager(limitBytes: 600)
+        manager.save(Article.sample(title: nil, description: "Only a description", url: "https://example.com/1"))
+        manager.save(Article.sample(title: "Second", url: "https://example.com/2"))
+
+        let received = evictions {
+            manager.save(Article.sample(title: "Third", url: "https://example.com/3"))
+        }
+
+        XCTAssertEqual(received.first?.titles, ["Only a description"])
+    }
+
+    func testNoNotificationWithoutEviction() {
+        let manager = makeManager()
+
+        let received = evictions {
+            manager.save(Article.sample(title: "Fits", url: "https://example.com/fits"))
+            manager.remove(Article.sample(title: "Fits", url: "https://example.com/fits"))
+        }
+
+        XCTAssertTrue(received.isEmpty)
+    }
+
     // MARK: - Widget Sync
 
     func testSavedArticlesArePublishedToTheWidgetOnEveryChange() {

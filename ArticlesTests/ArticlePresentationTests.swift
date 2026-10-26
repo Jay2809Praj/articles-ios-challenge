@@ -128,6 +128,52 @@ final class ArticlePresentationTests: XCTestCase {
         XCTAssertTrue(searchNone.isEmpty)
     }
 
+    // MARK: - Storage size formatting
+
+    func testStorageSizeFormatterRendersMegabytes() {
+        XCTAssertEqual(StorageSizeFormatter.megabytes(0), "0 MB")
+        XCTAssertEqual(StorageSizeFormatter.megabytes(12_345), "<0.1 MB")
+        XCTAssertEqual(StorageSizeFormatter.megabytes(712_328), "0.7 MB")
+        XCTAssertEqual(StorageSizeFormatter.megabytes(13_002_342), "12.4 MB")
+        XCTAssertEqual(StorageSizeFormatter.megabytes(50 * 1024 * 1024), "50 MB")
+        XCTAssertEqual(StorageSizeFormatter.megabytes(-5), "0 MB")
+    }
+
+    func testStorageLimitOverrideFromLaunchArgument() {
+        let defaults = UserDefaults(suiteName: "StorageLimitOverrideTests")!
+        defaults.removePersistentDomain(forName: "StorageLimitOverrideTests")
+        defer { defaults.removePersistentDomain(forName: "StorageLimitOverrideTests") }
+
+        XCTAssertEqual(AppConstants.SavedArticles.storageLimitBytes(from: defaults), 50 * 1024 * 1024)
+
+        defaults.set(2, forKey: AppConstants.SavedArticles.storageLimitOverrideKey)
+        XCTAssertEqual(AppConstants.SavedArticles.storageLimitBytes(from: defaults), 2 * 1024 * 1024)
+
+        defaults.set(0, forKey: AppConstants.SavedArticles.storageLimitOverrideKey)
+        XCTAssertEqual(AppConstants.SavedArticles.storageLimitBytes(from: defaults), 50 * 1024 * 1024)
+    }
+
+    func testStorageSizeFormatterUsageSummary() {
+        XCTAssertEqual(
+            StorageSizeFormatter.usageSummary(used: 13_002_342, limit: 50 * 1024 * 1024),
+            "12.4 MB of 50 MB used"
+        )
+        XCTAssertEqual(StorageSizeFormatter.usageSummary(used: 0, limit: 50 * 1024 * 1024), "0 MB of 50 MB used")
+    }
+
+    func testStorageLimitBannerWording() {
+        let one = StatusBannerView.Content.storageLimit(SavedArticlesEviction(reason: .storageFull, titles: ["Old News"]))
+        XCTAssertEqual(one.message, "Storage full: ‘Old News’ removed to make room.")
+
+        let several = StatusBannerView.Content.storageLimit(
+            SavedArticlesEviction(reason: .storageFull, titles: ["Old News", "Older News", "Oldest"])
+        )
+        XCTAssertEqual(several.message, "Storage full: ‘Old News’ and 2 more removed to make room.")
+
+        let huge = StatusBannerView.Content.storageLimit(SavedArticlesEviction(reason: .articleTooLarge, titles: ["Giant"]))
+        XCTAssertEqual(huge.message, "‘Giant’ is too large to save (over the 50 MB limit).")
+    }
+
     // MARK: - Widget Store
 
     func testSharedArticleStoreSavesAndLoadsArticles() {

@@ -25,6 +25,21 @@ struct SavedArticleRecord: Codable, Equatable {
     }
 }
 
+/// What the storage limit took away, so the UI can tell the user.
+struct SavedArticlesEviction: Equatable {
+    enum Reason: Equatable {
+        /// Older saved articles were removed to make room within the limit.
+        case storageFull
+        /// A single article, image included, is larger than the whole limit.
+        case articleTooLarge
+    }
+
+    let reason: Reason
+    /// Titles of the removed articles, oldest first; untitled ones fall back
+    /// to their description.
+    let titles: [String]
+}
+
 /// Disk-backed, thread-safe implementation of `FavoritesManagerProtocol` built on the
 /// `Cache` pod for the article records and `SavedImageStore` for the images.
 ///
@@ -50,6 +65,8 @@ final class FavoritesManager: FavoritesManagerProtocol {
     private let lock = NSRecursiveLock()
     private var records: [SavedArticleRecord] = []
     private var downloadingImageIDs: Set<String> = []
+    /// Evictions collected while the lock is held, reported once it is released.
+    private var pendingEvictions: [SavedArticlesEviction] = []
 
     init(
         defaults: UserDefaults = .standard,
@@ -118,6 +135,7 @@ final class FavoritesManager: FavoritesManagerProtocol {
             return true
         }()
 
+        reportPendingEvictions()
         if needsImage {
             downloadImageIfNeeded(for: article)
         }
@@ -177,6 +195,7 @@ final class FavoritesManager: FavoritesManagerProtocol {
 
     private func enforceLimit(freeing neededBytes: Int64 = 0) {
         var currentTotal = records.reduce(0) { $0 + $1.totalByteSize }
+        var evictedTitles: [String] = []
 
         while currentTotal + neededBytes > storageLimitBytes && !records.isEmpty {
             // Evict oldest saved article first
@@ -186,7 +205,12 @@ final class FavoritesManager: FavoritesManagerProtocol {
             records.remove(at: oldestIndex)
             currentTotal -= oldestRecord.totalByteSize
             imageStore.remove(for: oldestRecord.article.identifier)
+            evictedTitles.append(Self.displayTitle(of: oldestRecord.article))
             logger.info("Evicted oldest saved article '\(oldestRecord.article.title ?? "")' to stay within the storage limit")
+        }
+
+        if !evictedTitles.isEmpty {
+            pendingEvictions.append(SavedArticlesEviction(reason: .storageFull, titles: evictedTitles))
         }
     }
 
@@ -197,6 +221,7 @@ final class FavoritesManager: FavoritesManagerProtocol {
         if record.totalByteSize > storageLimitBytes {
             records.remove(at: index)
             imageStore.remove(for: record.article.identifier)
+            pendingEvictions.append(SavedArticlesEviction(reason: .articleTooLarge, titles: [Self.displayTitle(of: record.article)]))
             logger.warning("Removed article '\(record.article.title ?? "")' because its total size (\(record.totalByteSize) bytes) exceeds the \(storageLimitBytes) byte limit")
         }
     }
@@ -222,7 +247,10 @@ final class FavoritesManager: FavoritesManagerProtocol {
 
     private func storeDownloadedImage(_ data: Data?, for identifier: String) {
         lock.lock()
-        defer { lock.unlock() }
+        defer {
+            lock.unlock()
+            reportPendingEvictions()
+        }
 
         downloadingImageIDs.remove(identifier)
         // The article may have been removed while the download was running.
@@ -270,6 +298,7 @@ final class FavoritesManager: FavoritesManagerProtocol {
             return records.filter { $0.imageByteSize == 0 && $0.article.urlToImage != nil }.map(\.article)
         }()
 
+        reportPendingEvictions()
         for article in missing {
             downloadImageIfNeeded(for: article)
         }
@@ -291,6 +320,35 @@ final class FavoritesManager: FavoritesManagerProtocol {
             }
             completion(data)
         }.resume()
+    }
+
+    // MARK: - Eviction reporting
+
+    private static func displayTitle(of article: Article) -> String {
+        article.title ?? article.description ?? "Untitled article"
+    }
+
+    /// Posts one notification per eviction collected since the last call.
+    /// Never called while the lock is held, so observers may call back in.
+    private func reportPendingEvictions() {
+        let evictions: [SavedArticlesEviction] = {
+            lock.lock()
+            defer { lock.unlock() }
+            let pending = pendingEvictions
+            pendingEvictions.removeAll()
+            return pending
+        }()
+        guard !evictions.isEmpty else { return }
+
+        for eviction in evictions {
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(
+                    name: AppConstants.SavedArticles.didEvictNotification,
+                    object: nil,
+                    userInfo: [AppConstants.SavedArticles.evictionUserInfoKey: eviction]
+                )
+            }
+        }
     }
 
     // MARK: - Persistence

@@ -42,7 +42,7 @@ xcodebuild test -workspace Articles.xcworkspace -scheme Articles \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
 ```
 
-*All 106 unit tests pass with zero failures (`** TEST SUCCEEDED **`).*
+*All 115 unit tests pass with zero failures (`** TEST SUCCEEDED **`).*
 
 ---
 
@@ -84,6 +84,9 @@ Users can save articles to read offline from both the list card and the detail s
   - When the cumulative size of saved articles and images would exceed 50 MB (52,428,800 bytes), saving a new article evicts the oldest saved article and deletes its image file until the total is back within budget.
   - **Real sizes**: every image counts with the exact number of bytes its file occupies on disk, read back from the file system. Sizes are re-read on launch so the budget never drifts from reality.
   - **Async Image Re-enforcement**: Because image downloads complete asynchronously after an article is saved, the storage budget is **re-enforced whenever an image lands on disk**. This prevents the total from silently exceeding 50 MB when large images finish downloading.
+  - **The user is told**: whenever the limit removes saved articles, `FavoritesManager` posts a `SavedArticlesDidEvictNotification` carrying the removed titles and the reason; the list and detail screens show a toast such as "Storage full: ‘X’ removed to make room." or "‘X’ is too large to save (over the 50 MB limit)."
+  - **Usage is visible**: the Saved section shows "12.4 MB of 50 MB used" under the segmented control.
+  - **QA aid**: launch the app with `-SavedArticlesStorageLimitMB 1` (Xcode scheme arguments, or `xcrun simctl launch booted com.jayprajapati.Articles -SavedArticlesStorageLimitMB 1`) to exercise eviction without saving 50 MB.
   - **Single Article Exceeding Limit**: If a single article's total size (metadata + image) exceeds the entire 50 MB budget, it is automatically removed from saved storage to prevent permanently consuming the budget.
   - The behavior is covered by automated unit tests (`test50MBStorageLimitEvictsOldestArticleWhenExceeded`, `testAsyncImageSizeUpdateReEnforcesStorageLimit`, `testSingleArticleExceedingBudgetIsEvicted`).
 
@@ -184,14 +187,14 @@ The feed contains 79 articles with deliberate edge cases, all gracefully handled
 
 ## Automated Unit Testing
 
-The test suite covers **106 unit tests** with 100% pass rate:
+The test suite covers **115 unit tests** with 100% pass rate:
 
 - **`ArticleDecodingTests`** (8 tests): Fault-tolerant decoding of missing, null, empty and mistyped fields and malformed array elements.
-- **`ArticlePresentationTests`** (21 tests): Date parsing, link validation, display fallbacks, search filtering, section filter, `SharedArticleStore` (save/load, cycling and wrap-around, index reset when the list shrinks, per-article images and pruning, inert without a container) and deep link construction.
+- **`ArticlePresentationTests`** (25 tests): Storage size formatting, limit override from launch argument, storage-limit banner wording, Date parsing, link validation, display fallbacks, search filtering, section filter, `SharedArticleStore` (save/load, cycling and wrap-around, index reset when the list shrinks, per-article images and pruning, inert without a container) and deep link construction.
 - **`ArticlesManagerTests`** (15 tests): First page caching, cache fallback on failure, next pages appended and cached, failed page retry, reload discarding later pages, offline paging from the cache, lookups ignoring paging, and widget publishing.
 - **`ArticlesProviderTests`** (11 tests): Page slicing, `hasMore`, snapshot reuse with simulated latency, page 1 refreshing the snapshot, boundary pages, empty feed, invalid page numbers, filtering of empty articles, invalid JSON and network errors, endpoint security.
 - **`ConnectivityManagerTests`** (3 tests): Reachability state changes, observation unregistering, and debounce logic.
-- **`FavoritesManagerTests`** (21 tests): Full model persistence, images downloaded into the app's store with their real size, image file deleted on removal and eviction, failed and late downloads, missing images fetched again on launch, sizes re-read from disk, 50 MB budget eviction, async re-enforcement, single-article-over-budget handling, concurrent thread safety, ordering, and widget publishing.
+- **`FavoritesManagerTests`** (26 tests): Eviction notifications (titles, oldest first, too-large reason, description fallback, none without eviction), Full model persistence, images downloaded into the app's store with their real size, image file deleted on removal and eviction, failed and late downloads, missing images fetched again on launch, sizes re-read from disk, 50 MB budget eviction, async re-enforcement, single-article-over-budget handling, concurrent thread safety, ordering, and widget publishing.
 - **`SavedImageStoreTests`** (7 tests): File written under Application Support with its real size, replace, remove, remove all, empty data rejected, unknown article has no image.
 - **`WidgetSyncManagerTests`** (20 tests): List composition (last opened, saved, latest; de-duplication; cap of 10; title fallbacks), single publish with one reload, image download de-duplication, failed downloads, coalescing of launch-time updates, no pruning or index reset on relaunch, last opened persistence, and JPEG downsampling.
 

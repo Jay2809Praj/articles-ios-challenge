@@ -25,6 +25,7 @@ final class ArticleDetailViewController: UIViewController {
     private weak var router: ArticleRouting?
     private lazy var bannerPresenter = BannerPresenter(hostView: view, above: readFullArticleButton)
     private var savedObserver: NSObjectProtocol?
+    private var evictionObserver: NSObjectProtocol?
 
     override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
 
@@ -62,6 +63,9 @@ final class ArticleDetailViewController: UIViewController {
         if let savedObserver {
             NotificationCenter.default.removeObserver(savedObserver)
         }
+        if let evictionObserver {
+            NotificationCenter.default.removeObserver(evictionObserver)
+        }
     }
 
     override func viewDidLoad() {
@@ -85,6 +89,18 @@ final class ArticleDetailViewController: UIViewController {
             queue: .main
         ) { [weak self] _ in
             self?.renderFavoriteState(animated: true)
+        }
+        evictionObserver = NotificationCenter.default.addObserver(
+            forName: AppConstants.SavedArticles.didEvictNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            // Only the screen in front reports it; the list does so otherwise.
+            guard let self, self.view.window != nil, self.presentedViewController == nil,
+                  self.navigationController?.topViewController === self,
+                  let eviction = notification.userInfo?[AppConstants.SavedArticles.evictionUserInfoKey] as? SavedArticlesEviction
+            else { return }
+            self.bannerPresenter.toast(.storageLimit(eviction))
         }
     }
 

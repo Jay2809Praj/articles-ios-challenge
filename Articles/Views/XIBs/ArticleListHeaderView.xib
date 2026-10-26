@@ -14,6 +14,9 @@
                 <outlet property="filterSegmentedControl" destination="alh-sc-001" id="alh-o8-001"/>
                 <outlet property="layoutButton" destination="alh-lb-001" id="alh-o2-001"/>
                 <outlet property="searchButton" destination="alh-sb-001" id="alh-o3-001"/>
+                <outlet property="storageLabel" destination="alh-st-001" id="alh-o9-001"/>
+                <outlet property="storageTopConstraint" destination="alh-st-c1" id="alh-oa-001"/>
+                <outlet property="storageHeightConstraint" destination="alh-st-c2" id="alh-ob-001"/>
                 <outlet property="searchField" destination="alh-sf-001" id="alh-o4-001"/>
                 <outlet property="searchRow" destination="alh-sr-001" id="alh-o5-001"/>
                 <outlet property="titleLabel" destination="alh-tl-001" id="alh-o6-001"/>
@@ -95,7 +98,7 @@
                     </subviews>
                 </stackView>
                 <segmentedControl opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="left" contentVerticalAlignment="top" segmentControlStyle="plain" selectedSegmentIndex="0" translatesAutoresizingMaskIntoConstraints="NO" id="alh-sc-001" userLabel="Filter Segmented Control">
-                    <rect key="frame" x="16" y="74" width="361" height="33"/>
+                    <rect key="frame" x="16" y="74" width="361" height="32"/>
                     <constraints>
                         <constraint firstAttribute="height" constant="32" id="alh-sc-c1"/>
                     </constraints>
@@ -107,6 +110,15 @@
                         <action selector="filterChanged:" destination="-1" eventType="valueChanged" id="alh-sc-a1"/>
                     </connections>
                 </segmentedControl>
+                <label clipsSubviews="YES" opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="0 MB of 50 MB used" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="alh-st-001" userLabel="Storage Label">
+                    <rect key="frame" x="16" y="106" width="361" height="0.0"/>
+                    <constraints>
+                        <constraint firstAttribute="height" constant="0.0" id="alh-st-c2"/>
+                    </constraints>
+                    <fontDescription key="fontDescription" type="system" pointSize="12"/>
+                    <nil key="textColor"/>
+                    <nil key="highlightedColor"/>
+                </label>
             </subviews>
             <color key="backgroundColor" white="0.0" alpha="0.0" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
             <constraints>
@@ -116,7 +128,10 @@
                 <constraint firstItem="alh-sc-001" firstAttribute="top" secondItem="alh-tr-001" secondAttribute="bottom" constant="6" id="alh-sc-c2"/>
                 <constraint firstItem="alh-sc-001" firstAttribute="leading" secondItem="alh-rt-001" secondAttribute="leading" constant="16" id="alh-sc-c3"/>
                 <constraint firstAttribute="trailing" secondItem="alh-sc-001" secondAttribute="trailing" constant="16" id="alh-sc-c4"/>
-                <constraint firstAttribute="bottom" secondItem="alh-sc-001" secondAttribute="bottom" constant="12" id="alh-sc-c5"/>
+                <constraint firstItem="alh-st-001" firstAttribute="top" secondItem="alh-sc-001" secondAttribute="bottom" constant="0.0" id="alh-st-c1"/>
+                <constraint firstItem="alh-st-001" firstAttribute="leading" secondItem="alh-sc-001" secondAttribute="leading" id="alh-st-c3"/>
+                <constraint firstItem="alh-st-001" firstAttribute="trailing" secondItem="alh-sc-001" secondAttribute="trailing" id="alh-st-c4"/>
+                <constraint firstAttribute="bottom" secondItem="alh-st-001" secondAttribute="bottom" constant="12" id="alh-sc-c5"/>
                 <constraint firstItem="alh-sr-001" firstAttribute="leading" secondItem="alh-rt-001" secondAttribute="leading" constant="16" id="alh-ck-001"/>
                 <constraint firstAttribute="trailing" secondItem="alh-sr-001" secondAttribute="trailing" constant="16" id="alh-cl-001"/>
                 <constraint firstItem="alh-sr-001" firstAttribute="centerY" secondItem="alh-sb-001" secondAttribute="centerY" id="alh-cm-001"/>

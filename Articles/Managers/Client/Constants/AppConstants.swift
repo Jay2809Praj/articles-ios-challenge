@@ -21,9 +21,22 @@ enum AppConstants {
         static let storageName = "SavedArticlesCache"
         static let recordsKey = "saved_articles.records"
         static let maxStorageBytes: Int64 = 50 * 1024 * 1024 // 50 MB limit
+        /// Launch argument `-SavedArticlesStorageLimitMB <n>` lowers the limit
+        /// so the eviction behaviour can be exercised without saving 50 MB.
+        static let storageLimitOverrideKey = "SavedArticlesStorageLimitMB"
+
+        /// The limit to use: the override when one is set, 50 MB otherwise.
+        static func storageLimitBytes(from defaults: UserDefaults = .standard) -> Int64 {
+            let megabytes = defaults.integer(forKey: storageLimitOverrideKey)
+            return megabytes > 0 ? Int64(megabytes) * 1024 * 1024 : maxStorageBytes
+        }
         /// Under Application Support: the images of saved articles.
         static let imagesDirectory = "SavedArticles/Images"
         static let didChangeNotification = Notification.Name("SavedArticlesDidChangeNotification")
+        /// Posted on the main queue when the storage limit removed saved
+        /// articles; `userInfo[evictionUserInfoKey]` is a `SavedArticlesEviction`.
+        static let didEvictNotification = Notification.Name("SavedArticlesDidEvictNotification")
+        static let evictionUserInfoKey = "eviction"
     }
 
     enum Widget {

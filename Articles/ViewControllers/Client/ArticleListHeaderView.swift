@@ -23,6 +23,9 @@ final class ArticleListHeaderView: UIView, NibLoadable {
     @IBOutlet private var searchField: UISearchTextField!
     @IBOutlet private var cancelButton: UIButton!
     @IBOutlet private var filterSegmentedControl: UISegmentedControl!
+    @IBOutlet private var storageLabel: UILabel!
+    @IBOutlet private var storageTopConstraint: NSLayoutConstraint!
+    @IBOutlet private var storageHeightConstraint: NSLayoutConstraint!
 
     weak var delegate: ArticleListHeaderViewDelegate?
 
@@ -67,6 +70,7 @@ final class ArticleListHeaderView: UIView, NibLoadable {
         cancelButton.tintColor = AppColor.accent
 
         configureFilterSegmentedControl()
+        showsStorageUsage(false)
         applyFonts()
         updateLayoutButton()
 
@@ -99,6 +103,8 @@ final class ArticleListHeaderView: UIView, NibLoadable {
         titleLabel.accessibilityTraits = .header
         searchField.font = AppFont.banner
         cancelButton.titleLabel?.font = AppFont.banner
+        storageLabel.font = AppFont.cardDate
+        storageLabel.textColor = AppColor.textMuted
     }
 
     private func updateLayoutButton() {
@@ -155,13 +161,29 @@ final class ArticleListHeaderView: UIView, NibLoadable {
         delegate?.headerView(self, didSelectFilter: filter)
     }
 
-    func updateSavedCount(_ count: Int) {
+    /// Updates the "Saved (n)" segment and the storage line shown under it
+    /// while the Saved section is selected ("12.4 MB of 50 MB used").
+    func updateSavedSummary(count: Int, usedBytes: Int64, limitBytes: Int64) {
         let title = count > 0 ? "Saved (\(count))" : "Saved"
         filterSegmentedControl.setTitle(title, forSegmentAt: 1)
+        storageLabel.text = StorageSizeFormatter.usageSummary(used: usedBytes, limit: limitBytes)
+        storageLabel.accessibilityLabel = "Saved articles storage: \(storageLabel.text ?? "")"
+    }
+
+    /// The storage line only matters while looking at saved articles.
+    /// The storage line only matters while looking at saved articles. It is
+    /// collapsed with constraints rather than `isHidden` inside a stack view,
+    /// which has proven unreliable at restoring the height.
+    func showsStorageUsage(_ shows: Bool) {
+        storageHeightConstraint.isActive = !shows
+        storageTopConstraint.constant = shows ? 6 : 0
+        storageLabel.isHidden = !shows
+        setNeedsLayout()
     }
 
     func selectFilter(_ filter: ArticleListSectionFilter) {
         filterSegmentedControl.selectedSegmentIndex = filter.rawValue
+        showsStorageUsage(filter == .saved)
     }
 }
 
