@@ -51,7 +51,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard identifier != nil || webURL != nil else { return }
 
         // Saved articles stay available even when the feed cache is gone.
-        let known = favoritesManager.savedArticles() + (articlesManager.cachedArticles()?.articles ?? [])
+        let known = favoritesManager.savedArticles() + articlesManager.allCachedArticles()
         if let match = Self.article(in: known, identifier: identifier, webURL: webURL) {
             router.showArticleDetail(for: match)
             return

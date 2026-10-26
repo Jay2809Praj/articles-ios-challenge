@@ -42,7 +42,7 @@ xcodebuild test -workspace Articles.xcworkspace -scheme Articles \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
 ```
 
-*All 58 unit tests pass with zero failures (`** TEST SUCCEEDED **`).*
+*All 93 unit tests pass with zero failures (`** TEST SUCCEEDED **`).*
 
 ---
 
@@ -53,8 +53,8 @@ xcodebuild test -workspace Articles.xcworkspace -scheme Articles \
 | **Article List** | Storyboard scene, `UICollectionView` with XIB cells, list and grid layouts, inline search, and pull-to-refresh. |
 | **Article Detail** | Storyboard scene following the Figma frame, favourite/save toggle, opens full article in `SFSafariViewController`. |
 | **Save for Later (Feature 1)** | Dedicated Saved list, offline text and image persistence across app restarts, and 50 MB oldest-saved-first storage budget management with async re-enforcement. |
-| **Infinite Scroll (Feature 2 - Option A)** | Simulated 10-article pagination behind `ArticlePaginator`, seamless automatic loading on scroll, and native footer indicator. |
-| **Interactive Widget (Feature 2 - Option B)** | WidgetKit extension with `.systemSmall`, `.systemMedium`, `.systemLarge` sizes, real API data, magazine photo layout, interactive AppIntents (Next/Prev cycling), and deep linking (`articles://open?url=...`). |
+| **Infinite Scroll (Feature 2 - Option A)** | Pagination simulated inside `ArticlesProvider` (10 articles per page, as if the server paginated); `ArticlesManager` loads the next page on demand, including offline from the cache; the list shows a footer indicator while a page loads. |
+| **Interactive Widget (Feature 2 - Option B)** | WidgetKit extension with `.systemSmall`, `.systemMedium`, `.systemLarge` sizes, fed only by the app through an App Group (last opened, saved and latest articles with their images), interactive AppIntents (Next/Prev cycling), and deep linking (`articles://open?id=...`). |
 | **SwiftUI Integration** | `ContentStateView` (loading skeleton, offline, error, empty, no results, iPad placeholder) hosted via `UIHostingController`. |
 | **iPad Layout** | `UISplitViewController`, list and detail side-by-side; collapses to a navigation stack in compact widths. |
 | **Dynamic Type** | Every font scaled through `UIFontMetrics`; cells self-size; card footers stack vertically at accessibility sizes. |
@@ -90,24 +90,30 @@ Users can save articles to read offline from both the list card and the detail s
 To provide a complete, industry-grade implementation, both optional features were engineered:
 
 #### Option A: Infinite Scroll & Pagination
-- The mock API delivers all articles in a single payload.
-- `ArticlePaginator` simulates server-side pagination with **10 articles per page**.
-- As the user scrolls near the bottom of the feed (threshold-based trigger), the next page is loaded with a native UI activity indicator footer.
-- When searching, pagination cleanly resets to page 1 for filtered results.
+- The mock API delivers all articles in a single payload, so the pagination is simulated **behind the provider**, as the brief asks: everything above the provider sees a paged API.
+- `ArticlesProviderProtocol` exposes `fetchArticles(page:pageSize:)` and answers with an `ArticlesPage` (`articles`, `page`, `hasMore`).
+- `ArticlesProvider` plays the server: page 1 downloads the feed and keeps it as the snapshot; later pages are cut from that snapshot (**10 articles per page**) after a simulated latency of 0.6 s. Page 1 is always a fresh download, so pull-to-refresh picks up changes.
+- `ArticlesManager` exposes `loadArticles()` (first page) and `loadNextPage()`. The cache holds every page loaded so far; when the network is unavailable the cached list is served in pages of the same size, so scrolling behaves the same offline.
+- `ArticleListViewController` only asks the manager for the next page when the last loaded card is about to appear and shows the native activity indicator footer while waiting. It contains no paging logic or artificial delay.
+- Search filters the pages loaded so far; scrolling to the end of the results keeps loading pages.
+- A failed page load keeps what is on screen, shows a "Couldn't load more articles" toast, and can be retried by scrolling again.
 
 #### Option B: Home Screen Widget with Photos & Deep Linking
 - **Target**: `ArticlesWidget` extension built using **WidgetKit**, **SwiftUI**, and **AppIntents**.
 - **Supported Families**: `.systemSmall`, `.systemMedium`, and `.systemLarge`.
-- **Magazine-Grade Design**:
-  - **Medium**: Split layout featuring a high-resolution 112 pt rounded article thumbnail, live source indicator dot, headline, timestamp, and a "Read →" pill.
-  - **Small**: Full-bleed cover photo with a cinematic dark gradient overlay, glassmorphism source tag, bold headline, and quick refresh button.
-  - **Large**: Prominent hero banner image, headline, excerpt metadata, and direct action button.
+- **Data comes from the app only**. Both targets share the App Group `group.com.jayprajapati.Articles` (see `Articles.entitlements` and `ArticlesWidget.entitlements`). The widget makes no network requests and ships no article content; when the app has not loaded anything yet it shows an "Open Articles to load the latest news" state.
+  - `WidgetSyncManager` (app side) publishes up to 10 articles to `SharedArticleStore`: the article the user **opened last**, then the **saved** articles, then the **latest loaded** ones. It downloads each article's image once, downsampled to 800 px, and reloads the widget once per publish. Updates that arrive together during launch are coalesced into a single publish.
+  - `SharedArticleStore` is a file-based store inside the shared container (`articles.json`, one image per article, the browse index). It is compiled into both targets and knows nothing about WidgetKit or networking.
+  - The last opened article is remembered across app restarts, so after killing the app the widget still shows what the user read last.
+- **Layouts**:
+  - **Medium**: Split layout with a 112 pt rounded thumbnail, source, saved indicator, position (e.g. 3/10), headline, date, and a "Read →" pill.
+  - **Small**: Full-bleed cover photo with a dark gradient overlay, source tag, headline, and a Next button.
+  - **Large**: Hero image, source, date, position, headline, and an "Open Story" button.
 - **Interactive Browsing (AppIntents)**:
-  - Users can tap **Next (`>`)** or **Previous (`<`)** directly on the home screen widget to flip through articles without launching the app.
-  - Runs in-process via `NextArticleIntent` and `PreviousArticleIntent`.
+  - **Next (`>`)** and **Previous (`<`)** buttons cycle through the published list without launching the app, via `NextArticleIntent` and `PreviousArticleIntent`. Opening an article in the app brings the widget back to that article; a plain refresh leaves the browse position alone.
 - **Deep Linking**:
-  - Tapping an article or the "Read" button sends `articles://open?url=...`.
-  - `SceneDelegate` parses incoming URL contexts and instructs `AppRouter` to navigate directly to the article's detail view.
+  - Tapping the widget sends `articles://open?id=<article identifier>`.
+  - `SceneDelegate` looks the identifier up among the saved and cached articles (falling back to a fresh load) and asks `AppRouter` to show that article's detail view. `articles://open` without an identifier simply opens the app.
 
 ---
 
@@ -125,13 +131,13 @@ ViewControllers  →  Managers  →  ProviderProtocols  ←  Providers  →  Ala
 Articles/
 ├── Models/
 │   ├── ProviderProtocols/   ArticlesProviderProtocol, ReachabilityProviderProtocol, NetworkClientProtocol
-│   └── Entities/            Article, ArticleSource, ArticlesResponse, CachedArticles (Codable), LossyArray
+│   └── Entities/            Article, ArticleSource, ArticlesResponse, ArticlesPage, CachedArticles (Codable), LossyArray
 ├── Provider/
 │   ├── Client/              NetworkClient, NetworkError (+ mapper), NetworkEventLogger, ReachabilityProvider, Endpoint
 │   └── Core/                ArticlesProvider
 ├── Managers/
 │   ├── Client/              SharedArticleStore, Cache/ (ArticlesCache), Constants/, Utilities/
-│   └── Core/                ArticlesManager, ConnectivityManager, FavoritesManager (+ protocols), ArticlePaginator
+│   └── Core/                ArticlesManager, ConnectivityManager, FavoritesManager, WidgetSyncManager (+ protocols)
 ├── ViewControllers/
 │   ├── Client/              AppRouter, ViewControllerFactory, BannerPresenter, GlassHelper, ArticleDisplay
 │   ├── Core/                ArticleListViewController, ArticleDetailViewController
@@ -140,7 +146,7 @@ Articles/
 │   ├── XIBs/                Cells, list header, status banner
 │   ├── Storyboards/         ArticleList, ArticleDetail
 │   └── SwiftUI/             ContentStateView
-├── ArticlesWidget/          ArticlesWidget, ArticlesWidgetBundle, Info.plist
+├── ArticlesWidget/          ArticlesWidget, ArticlesWidgetBundle, Info.plist, ArticlesWidget.entitlements
 ├── Assets.xcassets          Icons, colors, and graphics
 └── AppDelegate.swift        App entry point & Swinject container setup
 ```
@@ -174,13 +180,15 @@ The feed contains 79 articles with deliberate edge cases, all gracefully handled
 
 ## Automated Unit Testing
 
-The test suite covers **58 unit tests** with 100% pass rate:
+The test suite covers **93 unit tests** with 100% pass rate:
 
-- **`ArticlePresentationTests`** (22 tests): Date parsing, link validation, lossy decoding, paginator math, page limits, widget shared store serialization, deep link URL query parameter construction, and interactive cycling.
-- **`ArticlesManagerTests`** (6 tests): Cache hit/miss fallbacks, network success caching, error propagation, and widget sync triggers.
-- **`ArticlesProviderTests`** (5 tests): Endpoint security, empty article filtering, and network error handling.
+- **`ArticleDecodingTests`** (8 tests): Fault-tolerant decoding of missing, null, empty and mistyped fields and malformed array elements.
+- **`ArticlePresentationTests`** (21 tests): Date parsing, link validation, display fallbacks, search filtering, section filter, `SharedArticleStore` (save/load, cycling and wrap-around, index reset when the list shrinks, per-article images and pruning, inert without a container) and deep link construction.
+- **`ArticlesManagerTests`** (15 tests): First page caching, cache fallback on failure, next pages appended and cached, failed page retry, reload discarding later pages, offline paging from the cache, lookups ignoring paging, and widget publishing.
+- **`ArticlesProviderTests`** (11 tests): Page slicing, `hasMore`, snapshot reuse with simulated latency, page 1 refreshing the snapshot, boundary pages, empty feed, invalid page numbers, filtering of empty articles, invalid JSON and network errors, endpoint security.
 - **`ConnectivityManagerTests`** (3 tests): Reachability state changes, observation unregistering, and debounce logic.
-- **`FavoritesManagerTests`** (14 tests): Full model persistence, 50 MB storage budget eviction, async image size re-enforcement, single-article-over-budget handling, image cleanup on deletion, concurrent thread safety, and ordering.
+- **`FavoritesManagerTests`** (15 tests): Full model persistence, 50 MB storage budget eviction, async image size re-enforcement, single-article-over-budget handling, image cleanup on deletion, concurrent thread safety, ordering, and widget publishing.
+- **`WidgetSyncManagerTests`** (20 tests): List composition (last opened, saved, latest; de-duplication; cap of 10; title fallbacks), single publish with one reload, image download de-duplication, failed downloads, coalescing of launch-time updates, no pruning or index reset on relaunch, last opened persistence, and JPEG downsampling.
 
 ---
 

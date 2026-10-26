@@ -29,8 +29,10 @@ enum AppConstants {
     }
 
     enum Pagination {
+        /// Articles per page, as the (simulated) server would hand them out.
         static let pageSize = 10
-        static let simulatedLoadDelay: TimeInterval = 0.8
+        /// How long the provider takes to answer a page it already holds.
+        static let simulatedLatency: TimeInterval = 0.6
     }
 
     enum Storyboard {

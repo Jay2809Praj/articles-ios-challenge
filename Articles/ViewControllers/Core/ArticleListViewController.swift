@@ -24,9 +24,10 @@ final class ArticleListViewController: UIViewController {
     private var searchQuery = ""
     private var layoutMode: ArticleListLayoutMode = .list
     private(set) var currentFilter: ArticleListSectionFilter = .all
-    private(set) var displayedPageCount: Int = 1
+    /// Whether the manager can append another page to `articles`.
+    private var hasMore = false
     private(set) var isLoadingNextPage = false
-    private var pagingTask: Task<Void, Never>?
+    private var nextPageTask: Task<Void, Never>?
     private var currentHasFooter = false
     private var loadTask: Task<Void, Never>?
     private var connectivityObservation: ConnectivityObservation?
@@ -57,7 +58,7 @@ final class ArticleListViewController: UIViewController {
 
     deinit {
         loadTask?.cancel()
-        pagingTask?.cancel()
+        nextPageTask?.cancel()
         if let savedObserver {
             NotificationCenter.default.removeObserver(savedObserver)
         }
@@ -77,6 +78,7 @@ final class ArticleListViewController: UIViewController {
         if let cached = articlesManager.cachedArticles() {
             latestResult = cached
             articles = cached.articles
+            hasMore = cached.hasMore
         }
         render()
         loadArticles()
@@ -144,20 +146,20 @@ final class ArticleListViewController: UIViewController {
 
     // MARK: - Loading
 
-    private func resetPagination() {
-        pagingTask?.cancel()
-        pagingTask = nil
-        displayedPageCount = 1
+    private func cancelNextPage() {
+        nextPageTask?.cancel()
+        nextPageTask = nil
         isLoadingNextPage = false
         dataSource.isLoadingMore = false
     }
 
     @objc private func refreshPulled() {
-        resetPagination()
         loadArticles()
     }
 
+    /// Loads the first page afresh; anything loaded before is replaced.
     private func loadArticles() {
+        cancelNextPage()
         loadTask?.cancel()
         loadTask = Task { [weak self, articlesManager] in
             let result = await articlesManager.loadArticles()
@@ -173,10 +175,40 @@ final class ArticleListViewController: UIViewController {
         loadTask = nil
         latestResult = result
         articles = result.articles
+        hasMore = result.hasMore
         refreshControl.endRefreshing()
-        resetPagination()
         render()
         reportFailureIfNeeded(of: result)
+    }
+
+    /// Asks the manager for the next page once the last loaded card is about
+    /// to appear. The manager decides where that page comes from.
+    private func loadNextPageIfNeeded() {
+        guard currentFilter == .all, hasMore, !isLoadingNextPage, loadTask == nil else { return }
+        isLoadingNextPage = true
+        dataSource.isLoadingMore = true
+
+        if let footer = collectionView.supplementaryView(
+            forElementKind: ArticleListLayoutFactory.footerElementKind,
+            at: IndexPath(item: 0, section: 0)
+        ) as? LoadingFooterView {
+            footer.startAnimating()
+        }
+
+        nextPageTask = Task { [weak self, articlesManager] in
+            let result = await articlesManager.loadNextPage()
+            guard !Task.isCancelled, let self else { return }
+            self.nextPageTask = nil
+            self.isLoadingNextPage = false
+            self.dataSource.isLoadingMore = false
+            self.latestResult = result
+            self.articles = result.articles
+            self.hasMore = result.hasMore
+            self.render()
+            if result.error != nil {
+                self.bannerPresenter.toast(.loadMoreFailed)
+            }
+        }
     }
 
     /// When a refresh fails but saved articles are on screen, say so without
@@ -224,25 +256,16 @@ final class ArticleListViewController: UIViewController {
         return ArticleSearchFilter.filter(baseArticles, matching: searchQuery)
     }
 
-    private var hasMorePages: Bool {
-        ArticlePaginator.hasMorePages(
-            totalCount: totalFilteredArticles.count,
-            page: displayedPageCount
-        )
-    }
-
-    private var visibleArticles: [Article] {
-        ArticlePaginator.paginate(
-            totalFilteredArticles,
-            page: displayedPageCount
-        )
+    /// The footer spinner only makes sense on the paged feed, not on the
+    /// local saved list.
+    private var showsLoadMoreFooter: Bool {
+        currentFilter == .all && hasMore
     }
 
     private func render() {
-        let visible = visibleArticles
-        dataSource.articles = visible
+        dataSource.articles = totalFilteredArticles
 
-        let needsFooter = hasMorePages
+        let needsFooter = showsLoadMoreFooter
         if needsFooter != currentHasFooter {
             currentHasFooter = needsFooter
             collectionView.setCollectionViewLayout(
@@ -258,29 +281,6 @@ final class ArticleListViewController: UIViewController {
             setStateVisible(true)
         } else {
             setStateVisible(false)
-        }
-    }
-
-    private func loadNextPageIfNeeded() {
-        guard hasMorePages, !isLoadingNextPage else { return }
-        isLoadingNextPage = true
-        dataSource.isLoadingMore = true
-
-        if let footer = collectionView.supplementaryView(
-            forElementKind: ArticleListLayoutFactory.footerElementKind,
-            at: IndexPath(item: 0, section: 0)
-        ) as? LoadingFooterView {
-            footer.startAnimating()
-        }
-
-        pagingTask?.cancel()
-        pagingTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(AppConstants.Pagination.simulatedLoadDelay * 1_000_000_000))
-            guard let self, !Task.isCancelled, self.isLoadingNextPage else { return }
-            self.displayedPageCount += 1
-            self.isLoadingNextPage = false
-            self.dataSource.isLoadingMore = false
-            self.render()
         }
     }
 
@@ -385,13 +385,11 @@ extension ArticleListViewController: ArticleListHeaderViewDelegate {
     }
 
     func headerView(_ headerView: ArticleListHeaderView, didChangeSearchText text: String) {
-        resetPagination()
         searchQuery = text
         render()
     }
 
     func headerViewDidEndSearch(_ headerView: ArticleListHeaderView) {
-        resetPagination()
         searchQuery = ""
         render()
     }
@@ -400,7 +398,6 @@ extension ArticleListViewController: ArticleListHeaderViewDelegate {
         guard currentFilter != filter else { return }
         currentFilter = filter
         refreshControl.isEnabled = (filter == .all)
-        resetPagination()
         if filter == .saved {
             bannerPresenter.unpin()
         } else if !connectivityManager.isOnline && !articles.isEmpty {

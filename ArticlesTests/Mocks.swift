@@ -2,13 +2,20 @@
 import Foundation
 import XCGLogger
 
+/// Plays a paginating server over an in-memory feed.
 final class MockArticlesProvider: ArticlesProviderProtocol {
-    var result: Result<[Article], NetworkError> = .success([])
-    private(set) var fetchCount = 0
+    var feed: Result<[Article], NetworkError> = .success([])
+    /// Pages that fail with the given error instead of answering.
+    var failingPages: [Int: NetworkError] = [:]
+    private(set) var requestedPages: [Int] = []
 
-    func fetchArticles() async throws -> [Article] {
-        fetchCount += 1
-        return try result.get()
+    func fetchArticles(page: Int, pageSize: Int) async throws -> ArticlesPage {
+        requestedPages.append(page)
+        if let error = failingPages[page] { throw error }
+        let all = try feed.get()
+        let start = min((page - 1) * pageSize, all.count)
+        let articles = Array(all[start..<min(start + pageSize, all.count)])
+        return ArticlesPage(articles: articles, page: page, hasMore: start + articles.count < all.count)
     }
 }
 
@@ -30,9 +37,11 @@ final class MockArticlesCache: ArticlesCacheProtocol {
 
 final class MockNetworkClient: NetworkClientProtocol {
     var result: Result<Data, NetworkError> = .success(Data())
+    private(set) var requestCount = 0
 
     func data(from endpoint: Endpoint) async throws -> Data {
-        try result.get()
+        requestCount += 1
+        return try result.get()
     }
 }
 
@@ -108,5 +117,12 @@ extension SharedArticleStore {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("SharedArticleStoreTests-\(UUID().uuidString)", isDirectory: true)
         return SharedArticleStore(containerURL: url)
+    }
+}
+
+extension Array where Element == Article {
+    /// `count` distinct sample articles titled "Article 1" … "Article N".
+    static func samples(_ count: Int) -> [Article] {
+        (1...Swift.max(count, 1)).prefix(count).map { Article.sample(title: "Article \($0)", url: "https://example.com/\($0)") }
     }
 }

@@ -17,6 +17,10 @@ final class StatusBannerView: UIView, NibLoadable {
             message: "Couldn’t refresh. Showing saved articles.",
             symbolName: AppIcon.Symbol.warning
         )
+        static let loadMoreFailed = Content(
+            message: "Couldn’t load more articles.",
+            symbolName: AppIcon.Symbol.warning
+        )
         static let favoriteAdded = Content(message: "Added to favourites", symbolName: AppIcon.Symbol.favorite)
         static let favoriteRemoved = Content(message: "Removed from favourites", symbolName: AppIcon.Symbol.favorite)
     }

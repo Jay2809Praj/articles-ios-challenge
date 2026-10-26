@@ -128,58 +128,6 @@ final class ArticlePresentationTests: XCTestCase {
         XCTAssertTrue(searchNone.isEmpty)
     }
 
-    // MARK: - Simulated Infinite Scrolling (Pagination)
-
-    func testPaginatorInitialPage() {
-        let sampleArticles = (1...25).map { index in
-            Article.sample(title: "Article \(index)", url: "https://example.com/\(index)")
-        }
-
-        let page1 = ArticlePaginator.paginate(sampleArticles, page: 1, pageSize: 10)
-        XCTAssertEqual(page1.count, 10)
-        XCTAssertEqual(page1.first?.title, "Article 1")
-        XCTAssertEqual(page1.last?.title, "Article 10")
-        XCTAssertTrue(ArticlePaginator.hasMorePages(totalCount: sampleArticles.count, page: 1, pageSize: 10))
-    }
-
-    func testPaginatorSecondAndFinalPages() {
-        let sampleArticles = (1...25).map { index in
-            Article.sample(title: "Article \(index)", url: "https://example.com/\(index)")
-        }
-
-        let page2 = ArticlePaginator.paginate(sampleArticles, page: 2, pageSize: 10)
-        XCTAssertEqual(page2.count, 20)
-        XCTAssertEqual(page2.last?.title, "Article 20")
-        XCTAssertTrue(ArticlePaginator.hasMorePages(totalCount: sampleArticles.count, page: 2, pageSize: 10))
-
-        let page3 = ArticlePaginator.paginate(sampleArticles, page: 3, pageSize: 10)
-        XCTAssertEqual(page3.count, 25)
-        XCTAssertEqual(page3.last?.title, "Article 25")
-        XCTAssertFalse(ArticlePaginator.hasMorePages(totalCount: sampleArticles.count, page: 3, pageSize: 10))
-    }
-
-    func testPaginatorBoundaryConditions() {
-        let empty: [Article] = []
-        XCTAssertTrue(ArticlePaginator.paginate(empty, page: 1, pageSize: 10).isEmpty)
-        XCTAssertFalse(ArticlePaginator.hasMorePages(totalCount: 0, page: 1, pageSize: 10))
-
-        // Less than 1 page
-        let fourArticles = (1...4).map { Article.sample(title: "Article \($0)", url: "https://example.com/\($0)") }
-        let pagedFour = ArticlePaginator.paginate(fourArticles, page: 1, pageSize: 10)
-        XCTAssertEqual(pagedFour.count, 4)
-        XCTAssertFalse(ArticlePaginator.hasMorePages(totalCount: 4, page: 1, pageSize: 10))
-
-        // Exact page size boundary (20 items with pageSize = 10)
-        let twentyArticles = (1...20).map { Article.sample(title: "Article \($0)", url: "https://example.com/\($0)") }
-        XCTAssertTrue(ArticlePaginator.hasMorePages(totalCount: 20, page: 1, pageSize: 10))
-        XCTAssertFalse(ArticlePaginator.hasMorePages(totalCount: 20, page: 2, pageSize: 10))
-
-        // Invalid page numbers
-        XCTAssertTrue(ArticlePaginator.paginate(twentyArticles, page: 0, pageSize: 10).isEmpty)
-        XCTAssertFalse(ArticlePaginator.hasMorePages(totalCount: 20, page: 0, pageSize: 10))
-        XCTAssertFalse(ArticlePaginator.hasMorePages(totalCount: 20, page: -1, pageSize: 10))
-    }
-
     // MARK: - Widget Store
 
     func testSharedArticleStoreSavesAndLoadsArticles() {
