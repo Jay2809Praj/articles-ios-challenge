@@ -32,38 +32,46 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         handleDeepLink(url)
     }
 
+    /// `articles://open?id=<identifier>` from the widget opens that article;
+    /// `articles://open` alone simply brings the app forward.
     private func handleDeepLink(_ url: URL) {
-        guard url.scheme == "articles" else { return }
-        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
-        let targetParam = components.queryItems?.first(where: { $0.name == "url" })?.value
-            ?? components.queryItems?.first(where: { $0.name == "title" })?.value
-
-        guard let appDelegate = UIApplication.shared.delegate as? AppDelegate,
+        guard url.scheme == "articles",
+              let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let appDelegate = UIApplication.shared.delegate as? AppDelegate,
               let router = appDelegate.container.resolve(AppRouter.self),
-              let articlesManager = appDelegate.container.resolve(ArticlesManagerProtocol.self) else { return }
+              let articlesManager = appDelegate.container.resolve(ArticlesManagerProtocol.self),
+              let favoritesManager = appDelegate.container.resolve(FavoritesManagerProtocol.self)
+        else {
+            return
+        }
 
-        // Match against cached articles first, or fetch asynchronously
-        if let articles = articlesManager.cachedArticles()?.articles {
-            if let match = findMatchingArticle(in: articles, target: targetParam) {
-                router.showArticleDetail(for: match)
-                return
-            }
+        let queryItems = components.queryItems ?? []
+        let identifier = queryItems.first(where: { $0.name == "id" })?.value
+        let webURL = queryItems.first(where: { $0.name == "url" })?.value
+        guard identifier != nil || webURL != nil else { return }
+
+        // Saved articles stay available even when the feed cache is gone.
+        let known = favoritesManager.savedArticles() + (articlesManager.cachedArticles()?.articles ?? [])
+        if let match = Self.article(in: known, identifier: identifier, webURL: webURL) {
+            router.showArticleDetail(for: match)
+            return
         }
 
         Task { @MainActor in
             let result = await articlesManager.loadArticles()
-            if let match = self.findMatchingArticle(in: result.articles, target: targetParam) {
+            if let match = Self.article(in: result.articles, identifier: identifier, webURL: webURL) {
                 router.showArticleDetail(for: match)
             }
         }
     }
 
-    private func findMatchingArticle(in articles: [Article], target: String?) -> Article? {
-        guard let target, !target.isEmpty else { return articles.first }
-        return articles.first(where: { article in
-            article.url == target ||
-            article.title == target ||
-            (article.title?.localizedCaseInsensitiveContains(target) ?? false)
-        })
+    private static func article(in articles: [Article], identifier: String?, webURL: String?) -> Article? {
+        if let identifier, let match = articles.first(where: { $0.identifier == identifier }) {
+            return match
+        }
+        if let webURL, let match = articles.first(where: { $0.url == webURL }) {
+            return match
+        }
+        return nil
     }
 }

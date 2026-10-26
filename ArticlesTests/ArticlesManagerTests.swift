@@ -64,6 +64,29 @@ final class ArticlesManagerTests: XCTestCase {
         XCTAssertEqual(cache.stored?.articles.map(\.title), ["Saved"])
     }
 
+    func testFreshArticlesArePublishedToTheWidget() async {
+        let widgetSync = MockWidgetSyncManager()
+        let manager = ArticlesManager(provider: provider, cache: cache, widgetSync: widgetSync, logger: .silent)
+        provider.result = .success([.sample(title: "Fresh")])
+
+        _ = await manager.loadArticles()
+
+        XCTAssertEqual(widgetSync.latestUpdates.map { $0.map(\.title) }, [["Fresh"]])
+    }
+
+    func testCachedArticlesArePublishedToTheWidgetAndFailuresAreNot() async {
+        let widgetSync = MockWidgetSyncManager()
+        let manager = ArticlesManager(provider: provider, cache: cache, widgetSync: widgetSync, logger: .silent)
+        cache.save([.sample(title: "Saved")])
+
+        _ = manager.cachedArticles()
+        provider.result = .failure(.offline)
+        _ = await manager.loadArticles()
+
+        XCTAssertEqual(widgetSync.latestUpdates.count, 1, "Only the cache read publishes; the failed refresh adds nothing new")
+        XCTAssertEqual(widgetSync.latestUpdates.first?.map(\.title), ["Saved"])
+    }
+
     func testCachedArticlesAreAvailableSynchronously() {
         XCTAssertNil(manager.cachedArticles())
 

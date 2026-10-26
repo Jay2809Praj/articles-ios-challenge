@@ -83,3 +83,25 @@ extension Article {
         )
     }
 }
+
+final class MockWidgetSyncManager: WidgetSyncManagerProtocol {
+    private(set) var latestUpdates: [[Article]] = []
+    private(set) var savedUpdates: [[Article]] = []
+
+    func updateLatestArticles(_ articles: [Article]) {
+        latestUpdates.append(articles)
+    }
+
+    func updateSavedArticles(_ articles: [Article]) {
+        savedUpdates.append(articles)
+    }
+}
+
+extension SharedArticleStore {
+    /// A store in a fresh temporary directory, isolated from the App Group.
+    static func temporary() -> SharedArticleStore {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SharedArticleStoreTests-\(UUID().uuidString)", isDirectory: true)
+        return SharedArticleStore(containerURL: url)
+    }
+}

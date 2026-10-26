@@ -37,6 +37,7 @@ struct SavedArticleRecord: Codable, Equatable {
 final class FavoritesManager: FavoritesManagerProtocol {
     private let storage: Storage<String, [SavedArticleRecord]>?
     private let defaults: UserDefaults
+    private let widgetSync: WidgetSyncManagerProtocol?
     private let logger: XCGLogger
     private let legacyKey = AppConstants.Favorites.storageKey
     private let storageKey = AppConstants.SavedArticles.recordsKey
@@ -54,10 +55,12 @@ final class FavoritesManager: FavoritesManagerProtocol {
         defaults: UserDefaults = .standard,
         storageName: String = AppConstants.SavedArticles.storageName,
         storageLimitBytes: Int64 = AppConstants.SavedArticles.maxStorageBytes,
+        widgetSync: WidgetSyncManagerProtocol? = nil,
         logger: XCGLogger = LoggerFactory.makeLogger()
     ) {
         self.defaults = defaults
         self.storageLimitBytes = storageLimitBytes
+        self.widgetSync = widgetSync
         self.logger = logger
 
         do {
@@ -72,6 +75,7 @@ final class FavoritesManager: FavoritesManagerProtocol {
         }
 
         loadPersistedRecords()
+        widgetSync?.updateSavedArticles(savedArticles())
     }
 
     // MARK: - FavoritesManagerProtocol
@@ -286,6 +290,7 @@ final class FavoritesManager: FavoritesManagerProtocol {
     }
 
     private func notifyChange() {
+        widgetSync?.updateSavedArticles(savedArticles())
         DispatchQueue.main.async {
             NotificationCenter.default.post(
                 name: AppConstants.SavedArticles.didChangeNotification,

@@ -176,6 +176,22 @@ final class FavoritesManagerTests: XCTestCase {
         XCTAssertEqual(result, .success, "Concurrent toggles deadlocked!")
     }
 
+    // MARK: - Widget Sync
+
+    func testSavedArticlesArePublishedToTheWidgetOnEveryChange() {
+        let widgetSync = MockWidgetSyncManager()
+        let manager = FavoritesManager(defaults: defaults, storageName: suiteName, widgetSync: widgetSync, logger: .silent)
+        manager.imageDownloader = { _, _ in }
+        XCTAssertEqual(widgetSync.savedUpdates, [[]], "The widget learns the saved list as soon as the manager loads it")
+
+        let article = Article.sample(title: "Widget Article", url: "https://example.com/widget")
+        manager.save(article)
+        XCTAssertEqual(widgetSync.savedUpdates.last?.map(\.title), ["Widget Article"])
+
+        manager.remove(article)
+        XCTAssertEqual(widgetSync.savedUpdates.last, [])
+    }
+
     // MARK: - Async Image Size Re-enforcement Tests
 
     func testAsyncImageSizeUpdateReEnforcesStorageLimit() {

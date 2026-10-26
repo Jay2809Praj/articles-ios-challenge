@@ -1,240 +1,151 @@
-import WidgetKit
-import SwiftUI
 import AppIntents
+import SwiftUI
+import WidgetKit
 
-// MARK: - App Intents (Interactive Widget Controls)
+// MARK: - App Intents (the widget's Previous / Next buttons)
 
 struct NextArticleIntent: AppIntent {
     static var title: LocalizedStringResource = "Next Article"
-    static var description = IntentDescription("Displays the next article in the Articles widget.")
+    static var description = IntentDescription("Shows the next article in the Articles widget.")
 
     func perform() async throws -> some IntentResult {
-        SharedArticleStore.cycleToNextArticle()
+        SharedArticleStore.shared.cycleToNextArticle()
+        WidgetCenter.shared.reloadTimelines(ofKind: ArticlesWidget.kind)
         return .result()
     }
 }
 
 struct PreviousArticleIntent: AppIntent {
     static var title: LocalizedStringResource = "Previous Article"
-    static var description = IntentDescription("Displays the previous article in the Articles widget.")
+    static var description = IntentDescription("Shows the previous article in the Articles widget.")
 
     func perform() async throws -> some IntentResult {
-        SharedArticleStore.cycleToPreviousArticle()
+        SharedArticleStore.shared.cycleToPreviousArticle()
+        WidgetCenter.shared.reloadTimelines(ofKind: ArticlesWidget.kind)
         return .result()
     }
 }
 
 // MARK: - Timeline Entry
 
-/// Timeline entry holding article data, current index, and photo for presentation.
+/// One article from the app, or nothing when the app has not loaded any yet.
 struct ArticleWidgetEntry: TimelineEntry {
     let date: Date
-    let title: String
-    let sourceName: String
-    let dateString: String
-    let webURL: String?
-    let imageURL: String?
+    let article: WidgetArticleData?
     let imageData: Data?
-    let currentIndex: Int
-    let totalArticles: Int
+    let index: Int
+    let total: Int
+
+    static let empty = ArticleWidgetEntry(date: Date(), article: nil, imageData: nil, index: 0, total: 0)
+
+    /// Skeleton for the widget gallery, rendered redacted. It is layout
+    /// filler, not content: real entries only ever come from the app's store.
+    static let placeholder = ArticleWidgetEntry(
+        date: Date(),
+        article: WidgetArticleData(id: "placeholder", title: "Article headline", sourceName: "Source", dateString: "Today"),
+        imageData: nil,
+        index: 0,
+        total: 1
+    )
 }
 
 // MARK: - Provider
 
-/// Provider managing instant timeline updates with zero skeleton delay.
+/// Reads whatever the app last published. No networking happens here: the app
+/// owns the data and asks WidgetKit to reload whenever it changes.
 struct ArticlesWidgetProvider: TimelineProvider {
-    private var defaultEntry: ArticleWidgetEntry {
-        let first = SharedArticleStore.defaultRealArticles[0]
-        return ArticleWidgetEntry(
-            date: Date(),
-            title: first.title,
-            sourceName: first.sourceName ?? "Bitcoinist",
-            dateString: "Today",
-            webURL: first.webURL,
-            imageURL: first.imageURL,
-            imageData: nil,
-            currentIndex: 0,
-            totalArticles: SharedArticleStore.defaultRealArticles.count
-        )
-    }
+    private let store = SharedArticleStore.shared
 
     func placeholder(in context: Context) -> ArticleWidgetEntry {
-        defaultEntry
+        .placeholder
     }
 
     func getSnapshot(in context: Context, completion: @escaping (ArticleWidgetEntry) -> Void) {
-        let current = SharedArticleStore.currentArticle() ?? (
-            article: SharedArticleStore.defaultRealArticles[0],
-            index: 0,
-            total: SharedArticleStore.defaultRealArticles.count
-        )
-        let cachedImageData = SharedArticleStore.loadImageData(forIndex: current.index)
-        let entry = ArticleWidgetEntry(
-            date: Date(),
-            title: current.article.title,
-            sourceName: current.article.sourceName ?? "Articles",
-            dateString: current.article.dateString ?? "Recent",
-            webURL: current.article.webURL,
-            imageURL: current.article.imageURL,
-            imageData: cachedImageData,
-            currentIndex: current.index,
-            totalArticles: current.total
-        )
-        completion(entry)
+        completion(context.isPreview && currentEntry().article == nil ? .placeholder : currentEntry())
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<ArticleWidgetEntry>) -> Void) {
-        let nextUpdate = Calendar.current.date(byAdding: .minute, value: 30, to: Date()) ?? Date()
+        // The app triggers reloads; the hourly refresh only guards against a missed one.
+        let refresh = Calendar.current.date(byAdding: .hour, value: 1, to: Date()) ?? Date()
+        completion(Timeline(entries: [currentEntry()], policy: .after(refresh)))
+    }
 
-        // 1. Fetch current article synchronously (GUARANTEED immediate, never blocks or hangs)
-        let current = SharedArticleStore.currentArticle() ?? (
-            article: SharedArticleStore.defaultRealArticles[0],
-            index: 0,
-            total: SharedArticleStore.defaultRealArticles.count
-        )
-
-        let index = current.index
-        let cachedImageData = SharedArticleStore.loadImageData(forIndex: index)
-
-        let entry = ArticleWidgetEntry(
+    private func currentEntry() -> ArticleWidgetEntry {
+        guard let current = store.currentArticle() else { return .empty }
+        return ArticleWidgetEntry(
             date: Date(),
-            title: current.article.title,
-            sourceName: current.article.sourceName ?? "Articles",
-            dateString: current.article.dateString ?? "Recent",
-            webURL: current.article.webURL,
-            imageURL: current.article.imageURL,
-            imageData: cachedImageData,
-            currentIndex: index,
-            totalArticles: current.total
+            article: current.article,
+            imageData: store.loadImageData(for: current.article.id),
+            index: current.index,
+            total: current.total
         )
-
-        // Return immediately so SpringBoard renders the full widget content without skeleton delay
-        completion(Timeline(entries: [entry], policy: .after(nextUpdate)))
-
-        // 2. Asynchronously download image for this index if missing
-        if cachedImageData == nil, let imageURL = current.article.imageURL {
-            fetchImageData(from: imageURL) { downloadedData in
-                guard let downloadedData else { return }
-                SharedArticleStore.saveImageData(downloadedData, forIndex: index)
-            }
-        }
-
-        // 3. Asynchronously refresh latest articles from real API
-        refreshFromRealAPIInBackground()
-    }
-
-    private func fetchImageData(from urlString: String?, completion: @escaping (Data?) -> Void) {
-        guard let urlString, let url = URL(string: urlString) else {
-            completion(nil)
-            return
-        }
-        URLSession.shared.dataTask(with: url) { data, _, _ in
-            completion(data)
-        }.resume()
-    }
-
-    private func refreshFromRealAPIInBackground() {
-        guard let url = URL(string: SharedArticleStore.realAPIEndpoint) else { return }
-
-        URLSession.shared.dataTask(with: url) { data, _, _ in
-            guard let data else { return }
-
-            struct Response: Decodable {
-                struct RawArticle: Decodable {
-                    let title: String?
-                    let url: String?
-                    let urlToImage: String?
-                    let publishedAt: String?
-                    let source: RawSource?
-                }
-                struct RawSource: Decodable {
-                    let name: String?
-                }
-                let articles: [RawArticle]?
-            }
-
-            guard let decoded = try? JSONDecoder().decode(Response.self, from: data),
-                  let rawArticles = decoded.articles, !rawArticles.isEmpty else { return }
-
-            let validArticles = rawArticles.compactMap { raw -> WidgetArticleData? in
-                guard let title = raw.title?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty else { return nil }
-                return WidgetArticleData(
-                    title: title,
-                    sourceName: raw.source?.name ?? "News",
-                    dateString: "Recent",
-                    webURL: raw.url,
-                    imageURL: raw.urlToImage
-                )
-            }
-
-            guard !validArticles.isEmpty else { return }
-            SharedArticleStore.saveArticles(validArticles)
-
-            // Prefetch image for current article
-            let currentIndex = SharedArticleStore.getCurrentIndex()
-            if currentIndex < validArticles.count,
-               let imageURL = validArticles[currentIndex].imageURL {
-                self.fetchImageData(from: imageURL) { downloadedData in
-                    guard let downloadedData else { return }
-                    SharedArticleStore.saveImageData(downloadedData, forIndex: currentIndex)
-                }
-            }
-        }.resume()
     }
 }
 
-// MARK: - SwiftUI Widget Entry View
+// MARK: - Entry View
 
-/// SwiftUI widget view supporting interactive browsing, real API data, and magazine-grade photos.
 struct ArticlesWidgetEntryView: View {
     var entry: ArticlesWidgetProvider.Entry
-    @Environment(\.widgetFamily) var family
+    @Environment(\.widgetFamily) private var family
+    @Environment(\.redactionReasons) private var redactionReasons
 
     private let themeBlue = Color(red: 25.0 / 255.0, green: 90.0 / 255.0, blue: 148.0 / 255.0)
 
     var body: some View {
         Group {
-            switch family {
-            case .systemSmall:
-                smallContent
-            case .systemLarge:
-                largeContent
-            default:
-                mediumContent
+            if let article = entry.article {
+                articleContent(article)
+            } else {
+                emptyContent
             }
         }
-        .unredacted()
         .widgetURL(deepLinkURL)
         .containerBackground(for: .widget) {
             containerBackgroundView
         }
     }
 
-    private var deepLinkURL: URL? {
-        guard let webURL = entry.webURL else {
-            return URL(string: "articles://open")
+    @ViewBuilder
+    private func articleContent(_ article: WidgetArticleData) -> some View {
+        switch family {
+        case .systemSmall:
+            smallContent(article)
+        case .systemLarge:
+            largeContent(article)
+        default:
+            mediumContent(article)
         }
+    }
+
+    /// Opens the exact article in the app, or just the app when there is none.
+    private var deepLinkURL: URL? {
         var components = URLComponents()
         components.scheme = "articles"
         components.host = "open"
-        components.queryItems = [URLQueryItem(name: "url", value: webURL)]
+        if let article = entry.article, !isPlaceholder {
+            components.queryItems = [URLQueryItem(name: "id", value: article.id)]
+        }
         return components.url
+    }
+
+    private var isPlaceholder: Bool {
+        redactionReasons.contains(.placeholder)
+    }
+
+    private var image: UIImage? {
+        entry.imageData.flatMap(UIImage.init(data:))
     }
 
     @ViewBuilder
     private var containerBackgroundView: some View {
-        if family == .systemSmall {
-            if let imageData = entry.imageData, let uiImage = UIImage(data: imageData) {
-                Image(uiImage: uiImage)
+        if family == .systemSmall, entry.article != nil {
+            if let image {
+                Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .overlay(
                         LinearGradient(
-                            colors: [
-                                Color.black.opacity(0.2),
-                                Color.black.opacity(0.55),
-                                Color.black.opacity(0.95)
-                            ],
+                            colors: [Color.black.opacity(0.2), Color.black.opacity(0.55), Color.black.opacity(0.95)],
                             startPoint: .top,
                             endPoint: .bottom
                         )
@@ -251,53 +162,103 @@ struct ArticlesWidgetEntryView: View {
         }
     }
 
-    // MARK: - Medium Layout (Interactive Magazine Split)
+    // MARK: Empty state
 
-    private var mediumContent: some View {
+    private var emptyContent: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "newspaper")
+                .font(.system(size: family == .systemSmall ? 26 : 34, weight: .medium))
+                .foregroundColor(themeBlue)
+            Text("No articles yet")
+                .font(.system(size: family == .systemSmall ? 13 : 15, weight: .bold))
+                .foregroundColor(.primary)
+            Text("Open Articles to load the latest news.")
+                .font(.system(size: family == .systemSmall ? 10 : 12))
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: Shared pieces
+
+    private var positionText: String {
+        "\(entry.index + 1)/\(max(entry.total, 1))"
+    }
+
+    private func sourceLabel(_ article: WidgetArticleData, size: CGFloat) -> some View {
+        HStack(spacing: 5) {
+            Circle()
+                .fill(themeBlue)
+                .frame(width: 6, height: 6)
+            Text((article.sourceName ?? "Articles").uppercased())
+                .font(.system(size: size, weight: .bold))
+                .foregroundColor(themeBlue)
+                .lineLimit(1)
+            if article.isSaved {
+                Image(systemName: "bookmark.fill")
+                    .font(.system(size: size, weight: .bold))
+                    .foregroundColor(themeBlue)
+                    .accessibilityLabel("Saved")
+            }
+        }
+    }
+
+    private func browseButtons(size: CGFloat) -> some View {
+        HStack(spacing: 3) {
+            Button(intent: PreviousArticleIntent()) {
+                Image(systemName: "chevron.left.circle.fill")
+                    .font(.system(size: size))
+                    .foregroundColor(themeBlue)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Previous article")
+
+            Button(intent: NextArticleIntent()) {
+                Image(systemName: "chevron.right.circle.fill")
+                    .font(.system(size: size))
+                    .foregroundColor(themeBlue)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Next article")
+        }
+    }
+
+    private func readLink(title: String, fontSize: CGFloat) -> some View {
+        Link(destination: deepLinkURL ?? URL(string: "articles://open")!) {
+            HStack(spacing: 3) {
+                Text(title)
+                    .font(.system(size: fontSize, weight: .bold))
+                Image(systemName: "arrow.right")
+                    .font(.system(size: fontSize - 1, weight: .bold))
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
+            .background(themeBlue, in: Capsule())
+        }
+    }
+
+    // MARK: Medium
+
+    private func mediumContent(_ article: WidgetArticleData) -> some View {
         HStack(spacing: 12) {
-            imageThumbnailView(width: 112)
+            thumbnail(article, width: 112)
 
             VStack(alignment: .leading, spacing: 5) {
-                // Header with Source, Counter, and Interactive Buttons
                 HStack(spacing: 5) {
-                    Circle()
-                        .fill(themeBlue)
-                        .frame(width: 6, height: 6)
-
-                    Text(entry.sourceName.uppercased())
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(themeBlue)
-                        .lineLimit(1)
-
+                    sourceLabel(article, size: 10)
                     Spacer()
-
-                    // Index indicator e.g. 1/5
-                    Text("\(entry.currentIndex + 1)/\(max(entry.totalArticles, 1))")
+                    Text(positionText)
                         .font(.system(size: 9, weight: .bold))
                         .foregroundColor(.secondary)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 2)
                         .background(Color.secondary.opacity(0.12), in: Capsule())
-
-                    // Interactive Prev & Next buttons right on the widget
-                    HStack(spacing: 3) {
-                        Button(intent: PreviousArticleIntent()) {
-                            Image(systemName: "chevron.left.circle.fill")
-                                .font(.system(size: 16))
-                                .foregroundColor(themeBlue)
-                        }
-                        .buttonStyle(.plain)
-
-                        Button(intent: NextArticleIntent()) {
-                            Image(systemName: "chevron.right.circle.fill")
-                                .font(.system(size: 16))
-                                .foregroundColor(themeBlue)
-                        }
-                        .buttonStyle(.plain)
-                    }
+                    browseButtons(size: 16)
                 }
 
-                Text(entry.title)
+                Text(article.title)
                     .font(.system(size: 13, weight: .bold))
                     .foregroundColor(.primary)
                     .lineLimit(3)
@@ -306,49 +267,40 @@ struct ArticlesWidgetEntryView: View {
 
                 Spacer(minLength: 0)
 
-                // Footer with Date and Read Action
                 HStack {
-                    Label(entry.dateString, systemImage: "clock")
+                    Label(article.dateString ?? "Recent", systemImage: "clock")
                         .font(.system(size: 9.5, weight: .medium))
                         .foregroundColor(.secondary)
-
                     Spacer()
-
-                    Link(destination: deepLinkURL ?? URL(string: "articles://open")!) {
-                        HStack(spacing: 3) {
-                            Text("Read")
-                                .font(.system(size: 11, weight: .bold))
-                            Image(systemName: "arrow.right")
-                                .font(.system(size: 10, weight: .bold))
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 4)
-                        .background(themeBlue, in: Capsule())
-                    }
+                    readLink(title: "Read", fontSize: 11)
                 }
             }
         }
     }
 
-    // MARK: - Small Layout (Interactive Cover)
+    // MARK: Small
 
-    private var smallContent: some View {
+    private func smallContent(_ article: WidgetArticleData) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(entry.sourceName.uppercased())
-                    .font(.system(size: 9, weight: .heavy))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3.5)
-                    .background(Color.white.opacity(0.22), in: Capsule())
+                HStack(spacing: 3) {
+                    Text((article.sourceName ?? "Articles").uppercased())
+                    if article.isSaved {
+                        Image(systemName: "bookmark.fill")
+                    }
+                }
+                .font(.system(size: 9, weight: .heavy))
+                .foregroundColor(.white)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3.5)
+                .background(Color.white.opacity(0.22), in: Capsule())
+                .lineLimit(1)
 
                 Spacer()
 
-                // Interactive Next Button
                 Button(intent: NextArticleIntent()) {
                     HStack(spacing: 2) {
-                        Text("\(entry.currentIndex + 1)")
+                        Text(positionText)
                             .font(.system(size: 8, weight: .bold))
                         Image(systemName: "arrow.triangle.2.circlepath")
                             .font(.system(size: 9, weight: .bold))
@@ -359,11 +311,12 @@ struct ArticlesWidgetEntryView: View {
                     .background(Color.black.opacity(0.4), in: Capsule())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Next article")
             }
 
             Spacer()
 
-            Text(entry.title)
+            Text(article.title)
                 .font(.system(size: 12.5, weight: .bold))
                 .foregroundColor(.white)
                 .lineLimit(3)
@@ -374,7 +327,7 @@ struct ArticlesWidgetEntryView: View {
                 HStack(spacing: 3) {
                     Image(systemName: "clock")
                         .font(.system(size: 8))
-                    Text(entry.dateString)
+                    Text(article.dateString ?? "Recent")
                         .font(.system(size: 9, weight: .medium))
                 }
                 Spacer()
@@ -385,31 +338,22 @@ struct ArticlesWidgetEntryView: View {
         }
     }
 
-    // MARK: - Large Layout (Hero Magazine Card)
+    // MARK: Large
 
-    private var largeContent: some View {
+    private func largeContent(_ article: WidgetArticleData) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Group {
-                if let imageData = entry.imageData, let uiImage = UIImage(data: imageData) {
-                    Image(uiImage: uiImage)
+                if let image {
+                    Image(uiImage: image)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                         .frame(maxWidth: .infinity)
                         .frame(height: 160)
                         .clipped()
                 } else {
-                    ZStack {
-                        LinearGradient(
-                            colors: [themeBlue, themeBlue.opacity(0.7)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                        Image(systemName: "newspaper.fill")
-                            .font(.system(size: 40))
-                            .foregroundColor(.white.opacity(0.85))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 160)
+                    imageFallback(sourceName: nil, iconSize: 40)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 160)
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -420,42 +364,20 @@ struct ArticlesWidgetEntryView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
-                    Circle()
-                        .fill(themeBlue)
-                        .frame(width: 6, height: 6)
-                    Text(entry.sourceName.uppercased())
-                        .font(.system(size: 11, weight: .heavy))
-                        .foregroundColor(themeBlue)
+                    sourceLabel(article, size: 11)
                     Text("•")
                         .foregroundColor(.secondary)
-                    Text(entry.dateString)
+                    Text(article.dateString ?? "Recent")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.secondary)
-
                     Spacer()
-
-                    Text("\(entry.currentIndex + 1) of \(max(entry.totalArticles, 1))")
+                    Text("\(entry.index + 1) of \(max(entry.total, 1))")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(.secondary)
-
-                    HStack(spacing: 4) {
-                        Button(intent: PreviousArticleIntent()) {
-                            Image(systemName: "chevron.left.circle.fill")
-                                .font(.system(size: 18))
-                                .foregroundColor(themeBlue)
-                        }
-                        .buttonStyle(.plain)
-
-                        Button(intent: NextArticleIntent()) {
-                            Image(systemName: "chevron.right.circle.fill")
-                                .font(.system(size: 18))
-                                .foregroundColor(themeBlue)
-                        }
-                        .buttonStyle(.plain)
-                    }
+                    browseButtons(size: 18)
                 }
 
-                Text(entry.title)
+                Text(article.title)
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(.primary)
                     .lineLimit(3)
@@ -464,80 +386,75 @@ struct ArticlesWidgetEntryView: View {
                 Spacer(minLength: 0)
 
                 HStack {
-                    Text("Tap to read full article")
+                    Text("Tap to read the full article")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.secondary)
                     Spacer()
-                    Link(destination: deepLinkURL ?? URL(string: "articles://open")!) {
-                        HStack(spacing: 4) {
-                            Text("Open Story")
-                                .font(.system(size: 12, weight: .bold))
-                            Image(systemName: "arrow.right")
-                                .font(.system(size: 11, weight: .bold))
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(themeBlue, in: Capsule())
-                    }
+                    readLink(title: "Open Story", fontSize: 12)
                 }
             }
         }
     }
 
-    // MARK: - Reusable Image Thumbnail
+    // MARK: Thumbnail
 
     @ViewBuilder
-    private func imageThumbnailView(width: CGFloat) -> some View {
-        if let imageData = entry.imageData, let uiImage = UIImage(data: imageData) {
-            Image(uiImage: uiImage)
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-                .frame(width: width)
-                .frame(maxHeight: .infinity)
-                .clipped()
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                )
-        } else {
-            ZStack {
-                LinearGradient(
-                    colors: [themeBlue, themeBlue.opacity(0.75)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                VStack(spacing: 6) {
-                    Image(systemName: "newspaper.fill")
-                        .font(.system(size: 26, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.9))
-                    Text(entry.sourceName)
+    private func thumbnail(_ article: WidgetArticleData, width: CGFloat) -> some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: width)
+                    .frame(maxHeight: .infinity)
+                    .clipped()
+            } else {
+                imageFallback(sourceName: article.sourceName, iconSize: 26)
+                    .frame(width: width)
+                    .frame(maxHeight: .infinity)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+        )
+    }
+
+    private func imageFallback(sourceName: String?, iconSize: CGFloat) -> some View {
+        ZStack {
+            LinearGradient(
+                colors: [themeBlue, themeBlue.opacity(0.75)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            VStack(spacing: 6) {
+                Image(systemName: "newspaper.fill")
+                    .font(.system(size: iconSize, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.9))
+                if let sourceName {
+                    Text(sourceName)
                         .font(.system(size: 9, weight: .heavy))
                         .foregroundColor(.white.opacity(0.85))
                         .lineLimit(1)
                         .padding(.horizontal, 6)
                 }
             }
-            .frame(width: width)
-            .frame(maxHeight: .infinity)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
     }
 }
 
 // MARK: - Widget Configuration
 
-/// The Widget definition exported by the extension.
 struct ArticlesWidget: Widget {
-    let kind: String = "ArticlesWidget"
+    static let kind = "ArticlesWidget"
 
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: ArticlesWidgetProvider()) { entry in
+        StaticConfiguration(kind: Self.kind, provider: ArticlesWidgetProvider()) { entry in
             ArticlesWidgetEntryView(entry: entry)
         }
         .configurationDisplayName("Latest Articles")
-        .description("Browse real news articles with photos and switch stories directly from your Home Screen.")
+        .description("Browse the articles loaded and saved in the app, right from your Home Screen.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
 }

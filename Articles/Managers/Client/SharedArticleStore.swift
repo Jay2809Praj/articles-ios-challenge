@@ -1,272 +1,202 @@
+import CryptoKit
 import Foundation
-#if canImport(WidgetKit)
-import WidgetKit
-#endif
 
-/// Lightweight transfer model representing an article for WidgetKit.
-public struct WidgetArticleData: Codable, Equatable {
-    public let title: String
-    public let sourceName: String?
-    public let dateString: String?
-    public let webURL: String?
-    public let imageURL: String?
-    public let imageData: Data?
+/// What the widget knows about one article. Written by the app, read by the
+/// widget extension; it deliberately carries no logic of its own.
+struct WidgetArticleData: Codable, Equatable {
+    /// `Article.identifier`, so a deep link can open exactly this article.
+    let id: String
+    let title: String
+    let sourceName: String?
+    let dateString: String?
+    let webURL: String?
+    let imageURL: String?
+    /// `true` when the user saved the article for later.
+    let isSaved: Bool
 
-    public init(
+    init(
+        id: String,
         title: String,
         sourceName: String? = nil,
         dateString: String? = nil,
         webURL: String? = nil,
         imageURL: String? = nil,
-        imageData: Data? = nil
+        isSaved: Bool = false
     ) {
+        self.id = id
         self.title = title
         self.sourceName = sourceName
         self.dateString = dateString
         self.webURL = webURL
         self.imageURL = imageURL
-        self.imageData = imageData
+        self.isSaved = isSaved
     }
 }
 
-/// Shared storage bridge between the main Articles app and the ArticlesWidget extension.
-public enum SharedArticleStore {
-    public static let appGroupID = "group.com.jayprajapati.Articles"
-    public static let storageKey = "latest_article_widget_data"
-    public static let articlesListKey = "latest_articles_list"
-    public static let currentIndexKey = "latest_article_current_index"
-    public static let sharedFileName = "articles_list.json"
-    public static let sharedLegacyFileName = "latest_article.json"
-    public static let sharedImageFileName = "latest_article_image.jpg"
-    public static let imageStorageKey = "latest_article_image_data"
+/// The hand-off point between the app and the widget: a folder inside the
+/// App Group container holding the article list, one downsampled image per
+/// article and the index the user has browsed to with the widget's buttons.
+///
+/// The app is the only writer of articles and images; the widget only reads
+/// them and moves the index. Nothing here talks to the network and nothing
+/// here knows about WidgetKit, so the same code is compiled into both targets.
+final class SharedArticleStore {
+    static let appGroupID = "group.com.jayprajapati.Articles"
 
-    /// Real API endpoint used across the Articles app.
-    public static let realAPIEndpoint = "https://mocki.io/v1/9f09ed09-d8ca-48c7-9957-dec39e745321"
+    /// The store backed by the App Group container. `isAvailable` is `false`
+    /// when the entitlement is missing, and every call then becomes a no-op.
+    static let shared = SharedArticleStore(
+        containerURL: FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupID)
+    )
 
-    private static var userDefaults: UserDefaults {
-        UserDefaults(suiteName: appGroupID) ?? .standard
+    private struct State: Codable {
+        var currentIndex: Int
     }
 
-    /// Shared directory path that works across app and extension.
-    private static var sharedDirectoryURL: URL? {
-        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupID)
-            ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+    private let directoryURL: URL?
+    private let fileManager: FileManager
+    private let encoder = JSONEncoder()
+    private let decoder = JSONDecoder()
+
+    /// - Parameter containerURL: the shared container, or any directory in tests.
+    init(containerURL: URL?, fileManager: FileManager = .default) {
+        self.fileManager = fileManager
+        directoryURL = containerURL?.appendingPathComponent("WidgetContent", isDirectory: true)
     }
 
-    private static var sharedFileURL: URL? {
-        sharedDirectoryURL?.appendingPathComponent(sharedFileName)
+    var isAvailable: Bool { directoryURL != nil }
+
+    // MARK: - Articles
+
+    /// Replaces the list the widget shows. Images of articles that are no
+    /// longer listed are deleted so the folder never grows beyond the list.
+    func saveArticles(_ articles: [WidgetArticleData]) {
+        guard let directoryURL, let data = try? encoder.encode(articles) else { return }
+        ensureDirectoryExists()
+        try? data.write(to: directoryURL.appendingPathComponent(Self.articlesFileName), options: .atomic)
+        pruneImages(keeping: Set(articles.map(\.id)))
+        clampIndex(to: articles.count)
     }
 
-    private static var sharedLegacyFileURL: URL? {
-        sharedDirectoryURL?.appendingPathComponent(sharedLegacyFileName)
-    }
-
-    private static var sharedImageFileURL: URL? {
-        sharedDirectoryURL?.appendingPathComponent(sharedImageFileName)
-    }
-
-    // MARK: - Multiple Articles Support
-
-    public static func saveArticles(_ articles: [WidgetArticleData]) {
-        guard !articles.isEmpty else { return }
-        guard let encoded = try? JSONEncoder().encode(articles) else { return }
-        userDefaults.set(encoded, forKey: articlesListKey)
-
-        if let fileURL = sharedFileURL {
-            try? encoded.write(to: fileURL, options: .atomic)
+    func loadArticles() -> [WidgetArticleData] {
+        guard let directoryURL,
+              let data = try? Data(contentsOf: directoryURL.appendingPathComponent(Self.articlesFileName)),
+              let articles = try? decoder.decode([WidgetArticleData].self, from: data)
+        else {
+            return []
         }
-
-        // Also save first article for legacy single-item consumers
-        if let first = articles.first {
-            save(first)
-        }
-
-        #if canImport(WidgetKit)
-        WidgetCenter.shared.reloadAllTimelines()
-        #endif
+        return articles
     }
 
-    public static func loadArticles() -> [WidgetArticleData] {
-        if let fileURL = sharedFileURL,
-           let fileData = try? Data(contentsOf: fileURL),
-           let list = try? JSONDecoder().decode([WidgetArticleData].self, from: fileData),
-           !list.isEmpty {
-            return list
-        }
-
-        if let data = userDefaults.data(forKey: articlesListKey),
-           let list = try? JSONDecoder().decode([WidgetArticleData].self, from: data),
-           !list.isEmpty {
-            return list
-        }
-
-        if let single = loadLatestArticle() {
-            return [single]
-        }
-
-        return defaultRealArticles
-    }
-
-    /// Real curated articles directly from the app API for instant presentation.
-    public static let defaultRealArticles: [WidgetArticleData] = [
-        WidgetArticleData(
-            title: "Dogecoin Payments On X: Cardano Founder Offers Elon Musk Bitcoin Roadmap For Implementation",
-            sourceName: "Bitcoinist",
-            dateString: "Today",
-            webURL: "https://bitcoinist.com/dogecoin-payments-on-x-cardano-elon-musk/",
-            imageURL: "https://bitcoinist.com/wp-content/uploads/2025/03/dogecoin-payments-x-cardano-elon-musk.jpg"
-        ),
-        WidgetArticleData(
-            title: "Trump Tightens Leash on Elon Musk and DOGE: It’s Time for ‘Scalpel Rather Than Hatchet’",
-            sourceName: "Mediaite",
-            dateString: "Today",
-            webURL: "https://www.mediaite.com/trump/trump-tightens-leash-on-elon-musk-and-doge-its-time-for-scalpel-rather-than-hatchet/",
-            imageURL: "https://www.mediaite.com/wp-content/uploads/2025/02/AP25042756828063-scaled.jpg"
-        ),
-        WidgetArticleData(
-            title: "Tesla stock sinks 6% after Baird analysts say Musk's government role adds 'uncertainty' to delivery outlook",
-            sourceName: "Biztoc.com",
-            dateString: "Today",
-            webURL: "https://biztoc.com/x/95a955058a1fe5c9",
-            imageURL: "https://biztoc.com/cdn/906/og.png"
-        ),
-        WidgetArticleData(
-            title: "Baki Hanma Reveals New Video Game (And It’s Coming To America)",
-            sourceName: "ComicBook.com",
-            dateString: "Today",
-            webURL: "http://comicbook.com/anime/news/baki-hanma-new-game-north-america/",
-            imageURL: "https://comicbook.com/wp-content/uploads/sites/4/2025/03/Baki-Hanma.jpg?w=1920"
-        ),
-        WidgetArticleData(
-            title: "House panel subpoenas Google parent Alphabet over content moderation during Biden years",
-            sourceName: "New York Post",
-            dateString: "Today",
-            webURL: "https://nypost.com/2025/03/06/business/house-panel-subpoenas-google-parent-alphabet-over-content-moderation/",
-            imageURL: "https://nypost.com/wp-content/uploads/sites/2/2025/03/newspress-collage-lscpqkxqs-1741289761373.jpg?quality=75&strip=all&1741271795&w=1024"
-        )
-    ]
-
-    // MARK: - Interactive Widget Navigation
-
-    public static func getCurrentIndex() -> Int {
-        userDefaults.integer(forKey: currentIndexKey)
-    }
-
-    public static func cycleToNextArticle() {
+    /// The article the widget is currently showing, with its position.
+    func currentArticle() -> (article: WidgetArticleData, index: Int, total: Int)? {
         let articles = loadArticles()
-        guard !articles.isEmpty else { return }
-        let nextIndex = (getCurrentIndex() + 1) % articles.count
-        userDefaults.set(nextIndex, forKey: currentIndexKey)
-        #if canImport(WidgetKit)
-        WidgetCenter.shared.reloadAllTimelines()
-        #endif
+        guard !articles.isEmpty else { return nil }
+        let index = min(max(currentIndex(), 0), articles.count - 1)
+        return (articles[index], index, articles.count)
     }
 
-    public static func cycleToPreviousArticle() {
-        let articles = loadArticles()
-        guard !articles.isEmpty else { return }
-        let prevIndex = (getCurrentIndex() - 1 + articles.count) % articles.count
-        userDefaults.set(prevIndex, forKey: currentIndexKey)
-        #if canImport(WidgetKit)
-        WidgetCenter.shared.reloadAllTimelines()
-        #endif
+    // MARK: - Browsing (driven by the widget's buttons)
+
+    func currentIndex() -> Int {
+        guard let directoryURL,
+              let data = try? Data(contentsOf: directoryURL.appendingPathComponent(Self.stateFileName)),
+              let state = try? decoder.decode(State.self, from: data)
+        else {
+            return 0
+        }
+        return state.currentIndex
     }
 
-    public static func currentArticle() -> (article: WidgetArticleData, index: Int, total: Int)? {
-        let list = loadArticles()
-        guard !list.isEmpty else { return nil }
-        var index = getCurrentIndex()
-        if index < 0 || index >= list.count {
-            index = 0
-            userDefaults.set(0, forKey: currentIndexKey)
-        }
-        return (list[index], index, list.count)
+    func cycleToNextArticle() {
+        let count = loadArticles().count
+        guard count > 0 else { return }
+        setCurrentIndex((currentIndex() + 1) % count)
     }
 
-    // MARK: - Single Article Backward Compatibility
-
-    public static func saveLatestArticle(
-        title: String,
-        sourceName: String? = nil,
-        dateString: String? = nil,
-        webURL: String? = nil,
-        imageURL: String? = nil,
-        imageData: Data? = nil
-    ) {
-        let data = WidgetArticleData(
-            title: title,
-            sourceName: sourceName,
-            dateString: dateString,
-            webURL: webURL,
-            imageURL: imageURL,
-            imageData: imageData
-        )
-        save(data)
+    func cycleToPreviousArticle() {
+        let count = loadArticles().count
+        guard count > 0 else { return }
+        setCurrentIndex((currentIndex() - 1 + count) % count)
     }
 
-    public static func save(_ data: WidgetArticleData) {
-        guard let encoded = try? JSONEncoder().encode(data) else { return }
-        userDefaults.set(encoded, forKey: storageKey)
+    // MARK: - Images
 
-        if let fileURL = sharedLegacyFileURL {
-            try? encoded.write(to: fileURL, options: .atomic)
+    func hasImage(for articleID: String) -> Bool {
+        guard let url = imageFileURL(for: articleID) else { return false }
+        return fileManager.fileExists(atPath: url.path)
+    }
+
+    func saveImageData(_ data: Data, for articleID: String) {
+        guard !data.isEmpty, let url = imageFileURL(for: articleID) else { return }
+        ensureDirectoryExists()
+        try? data.write(to: url, options: .atomic)
+    }
+
+    func loadImageData(for articleID: String) -> Data? {
+        guard let url = imageFileURL(for: articleID),
+              let data = try? Data(contentsOf: url), !data.isEmpty
+        else {
+            return nil
         }
+        return data
+    }
 
-        if let imageData = data.imageData {
-            saveImageData(imageData, forIndex: 0)
-        } else {
-            #if canImport(WidgetKit)
-            WidgetCenter.shared.reloadAllTimelines()
-            #endif
+    /// Removes everything the store holds.
+    func clear() {
+        guard let directoryURL else { return }
+        try? fileManager.removeItem(at: directoryURL)
+    }
+
+    // MARK: - Private
+
+    private static let articlesFileName = "articles.json"
+    private static let stateFileName = "state.json"
+    private static let imagesDirectoryName = "Images"
+
+    private var imagesDirectoryURL: URL? {
+        directoryURL?.appendingPathComponent(Self.imagesDirectoryName, isDirectory: true)
+    }
+
+    private func imageFileURL(for articleID: String) -> URL? {
+        imagesDirectoryURL?.appendingPathComponent(Self.fileName(for: articleID))
+    }
+
+    /// Identifiers contain URLs; a hash makes a safe, fixed-length file name.
+    private static func fileName(for articleID: String) -> String {
+        let digest = SHA256.hash(data: Data(articleID.utf8))
+        return digest.map { String(format: "%02x", $0) }.joined() + ".jpg"
+    }
+
+    private func ensureDirectoryExists() {
+        guard let imagesDirectoryURL else { return }
+        try? fileManager.createDirectory(at: imagesDirectoryURL, withIntermediateDirectories: true)
+    }
+
+    private func pruneImages(keeping articleIDs: Set<String>) {
+        guard let imagesDirectoryURL,
+              let files = try? fileManager.contentsOfDirectory(at: imagesDirectoryURL, includingPropertiesForKeys: nil)
+        else {
+            return
+        }
+        let wanted = Set(articleIDs.map(Self.fileName(for:)))
+        for file in files where !wanted.contains(file.lastPathComponent) {
+            try? fileManager.removeItem(at: file)
         }
     }
 
-    public static func loadLatestArticle() -> WidgetArticleData? {
-        if let fileURL = sharedLegacyFileURL,
-           let fileData = try? Data(contentsOf: fileURL),
-           let article = try? JSONDecoder().decode(WidgetArticleData.self, from: fileData) {
-            return article
-        }
-
-        if let defaultsData = userDefaults.data(forKey: storageKey),
-           let article = try? JSONDecoder().decode(WidgetArticleData.self, from: defaultsData) {
-            return article
-        }
-
-        return nil
+    private func setCurrentIndex(_ index: Int) {
+        guard let directoryURL, let data = try? encoder.encode(State(currentIndex: index)) else { return }
+        ensureDirectoryExists()
+        try? data.write(to: directoryURL.appendingPathComponent(Self.stateFileName), options: .atomic)
     }
 
-    // MARK: - Image Data Storage (Per-Index & Global)
-
-    public static func saveImageData(_ data: Data, forIndex index: Int = 0) {
-        let filename = "latest_article_image_\(index).jpg"
-        if let fileURL = sharedDirectoryURL?.appendingPathComponent(filename) {
-            try? data.write(to: fileURL, options: .atomic)
+    private func clampIndex(to count: Int) {
+        let index = currentIndex()
+        if count == 0 {
+            setCurrentIndex(0)
+        } else if index < 0 || index >= count {
+            setCurrentIndex(0)
         }
-        if index == 0 {
-            if let defaultURL = sharedImageFileURL {
-                try? data.write(to: defaultURL, options: .atomic)
-            }
-        }
-        userDefaults.set(data, forKey: "\(imageStorageKey)_\(index)")
-        #if canImport(WidgetKit)
-        WidgetCenter.shared.reloadAllTimelines()
-        #endif
-    }
-
-    public static func loadImageData(forIndex index: Int = 0) -> Data? {
-        let filename = "latest_article_image_\(index).jpg"
-        if let fileURL = sharedDirectoryURL?.appendingPathComponent(filename),
-           let data = try? Data(contentsOf: fileURL), !data.isEmpty {
-            return data
-        }
-        if let data = userDefaults.data(forKey: "\(imageStorageKey)_\(index)"), !data.isEmpty {
-            return data
-        }
-        if let defaultURL = sharedImageFileURL,
-           let data = try? Data(contentsOf: defaultURL), !data.isEmpty {
-            return data
-        }
-        return userDefaults.data(forKey: imageStorageKey)
     }
 }
