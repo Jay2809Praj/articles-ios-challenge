@@ -19,7 +19,24 @@ final class RemoteImageView: UIImageView {
         configure()
     }
 
-    func setImage(with url: URL?) {
+    /// Shows `localFile` when given – the app's own copy of a saved article's
+    /// image, which needs neither network nor an image cache – and otherwise
+    /// loads `url` from the network.
+    func setImage(with url: URL?, localFile: URL? = nil) {
+        if let localFile {
+            kf.setImage(
+                with: LocalFileImageDataProvider(fileURL: localFile),
+                placeholder: AppIcon.imagePlaceholder,
+                options: [
+                    .processor(DownsamplingImageProcessor(size: targetSize)),
+                    .scaleFactor(traitCollection.displayScale),
+                    .cacheMemoryOnly,
+                    .onFailureImage(AppIcon.imagePlaceholder)
+                ]
+            )
+            return
+        }
+
         guard let url else {
             cancelLoading()
             image = AppIcon.imagePlaceholder

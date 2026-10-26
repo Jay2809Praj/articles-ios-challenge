@@ -21,6 +21,8 @@ enum AppConstants {
         static let storageName = "SavedArticlesCache"
         static let recordsKey = "saved_articles.records"
         static let maxStorageBytes: Int64 = 50 * 1024 * 1024 // 50 MB limit
+        /// Under Application Support: the images of saved articles.
+        static let imagesDirectory = "SavedArticles/Images"
         static let didChangeNotification = Notification.Name("SavedArticlesDidChangeNotification")
     }
 

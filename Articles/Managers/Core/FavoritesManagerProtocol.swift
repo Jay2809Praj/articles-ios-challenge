@@ -6,10 +6,10 @@ protocol FavoritesManagerProtocol: AnyObject {
     func isFavorite(_ article: Article) -> Bool
     func isSaved(_ article: Article) -> Bool
 
-    /// Saves an article with its full content and persists its image offline.
+    /// Saves an article with its full content and stores its image for offline use.
     func save(_ article: Article)
 
-    /// Removes an article from saved storage and cleans up its cached image.
+    /// Removes an article from saved storage and deletes its stored image.
     func remove(_ article: Article)
 
     /// Flips the saved / favourite state of an article.
@@ -22,6 +22,11 @@ protocol FavoritesManagerProtocol: AnyObject {
 
     /// Returns all saved articles sorted by most recently saved first.
     func savedArticles() -> [Article]
+
+    /// The image file stored for a saved article, so the UI can show it
+    /// without any network or image cache. `nil` when the article is not
+    /// saved or its image has not been stored (yet).
+    func savedImageURL(for article: Article) -> URL?
 
     /// Total storage currently used by saved articles and their images (in bytes).
     var totalStorageBytes: Int64 { get }

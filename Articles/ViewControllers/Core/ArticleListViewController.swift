@@ -90,6 +90,7 @@ final class ArticleListViewController: UIViewController {
         dataSource.registerCells(in: collectionView)
         dataSource.onReadMore = { [weak self] article in self?.open(article) }
         dataSource.isSaved = { [weak self] article in self?.favoritesManager.isSaved(article) ?? false }
+        dataSource.savedImageURL = { [weak self] article in self?.favoritesManager.savedImageURL(for: article) }
         dataSource.onToggleSave = { [weak self] article in self?.favoritesManager.toggleSave(article) }
 
         collectionView.dataSource = dataSource

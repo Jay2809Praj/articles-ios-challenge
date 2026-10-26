@@ -67,7 +67,7 @@ final class ArticleCardCell: UICollectionViewCell, NibReusable {
         saveButton.layer.cornerRadius = saveButton.bounds.height / 2
     }
 
-    func configure(with display: ArticleDisplay, isSaved: Bool = false) {
+    func configure(with display: ArticleDisplay, isSaved: Bool = false, localImageURL: URL? = nil) {
         let isAccessibilitySize = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
 
         titleLabel.numberOfLines = isAccessibilitySize ? 4 : 2
@@ -92,7 +92,7 @@ final class ArticleCardCell: UICollectionViewCell, NibReusable {
         footerStack.alignment = isAccessibilitySize ? .leading : .center
         spacerView.isHidden = isAccessibilitySize
 
-        articleImageView.setImage(with: display.imageURL)
+        articleImageView.setImage(with: display.imageURL, localFile: localImageURL)
         updateSavedState(isSaved)
 
         accessibilityLabel = [display.title, display.listDate].compactMap { $0 }.joined(separator: ", ")

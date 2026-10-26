@@ -126,3 +126,44 @@ extension Array where Element == Article {
         (1...Swift.max(count, 1)).prefix(count).map { Article.sample(title: "Article \($0)", url: "https://example.com/\($0)") }
     }
 }
+
+/// In-memory stand-in for `SavedImageStore`.
+final class MockSavedImageStore: SavedImageStoreProtocol {
+    private let lock = NSLock()
+    private var files: [String: Data] = [:]
+    private(set) var removed: [String] = []
+    private(set) var removeAllCount = 0
+    private let baseURL = URL(fileURLWithPath: "/mock/saved-images")
+
+    var storedIDs: [String] { lock.withLock { Array(files.keys) } }
+
+    func imageURL(for articleID: String) -> URL? {
+        lock.withLock { files[articleID] == nil ? nil : baseURL.appendingPathComponent(articleID) }
+    }
+
+    @discardableResult
+    func save(_ data: Data, for articleID: String) -> Int64 {
+        lock.withLock {
+            files[articleID] = data
+            return Int64(data.count)
+        }
+    }
+
+    func byteSize(for articleID: String) -> Int64 {
+        lock.withLock { Int64(files[articleID]?.count ?? 0) }
+    }
+
+    func remove(for articleID: String) {
+        lock.withLock {
+            files[articleID] = nil
+            removed.append(articleID)
+        }
+    }
+
+    func removeAll() {
+        lock.withLock {
+            files = [:]
+            removeAllCount += 1
+        }
+    }
+}

@@ -54,7 +54,7 @@ final class ArticleGridCell: UICollectionViewCell, NibReusable {
         saveButton.layer.cornerRadius = saveButton.bounds.height / 2
     }
 
-    func configure(with display: ArticleDisplay, isSaved: Bool = false) {
+    func configure(with display: ArticleDisplay, isSaved: Bool = false, localImageURL: URL? = nil) {
         let font = AppFont.cardTitle
         titleLabel.attributedText = TextStyler.attributedString(
             display.title,
@@ -65,7 +65,7 @@ final class ArticleGridCell: UICollectionViewCell, NibReusable {
         // Always reserve two lines so cards in the same row share a height.
         titleMinimumHeight.constant = 2 * (font.pointSize * AppFont.cardTitleLineHeight).rounded()
 
-        articleImageView.setImage(with: display.imageURL)
+        articleImageView.setImage(with: display.imageURL, localFile: localImageURL)
         updateSavedState(isSaved)
 
         accessibilityLabel = display.title

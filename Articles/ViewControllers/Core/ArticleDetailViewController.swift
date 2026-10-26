@@ -70,7 +70,7 @@ final class ArticleDetailViewController: UIViewController {
         renderText()
         renderFavoriteState(animated: false)
         observeSavedArticles()
-        articleImageView.setImage(with: display.imageURL)
+        articleImageView.setImage(with: display.imageURL, localFile: favoritesManager.savedImageURL(for: article))
         widgetSync?.updateLastOpenedArticle(article)
 
         registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: Self, _) in

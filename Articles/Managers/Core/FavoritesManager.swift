@@ -1,9 +1,8 @@
 import Cache
 import Foundation
-import Kingfisher
 import XCGLogger
 
-/// Internal representation of a saved article and its cached image footprint.
+/// Internal representation of a saved article and its stored image footprint.
 struct SavedArticleRecord: Codable, Equatable {
     let article: Article
     let savedAt: Date
@@ -27,16 +26,21 @@ struct SavedArticleRecord: Codable, Equatable {
 }
 
 /// Disk-backed, thread-safe implementation of `FavoritesManagerProtocol` built on the
-/// `Cache` pod and Kingfisher.
+/// `Cache` pod for the article records and `SavedImageStore` for the images.
 ///
-/// Articles are persisted with their full text content and cached image data so that
-/// they remain 100% available offline even after force quitting and relaunching the app.
-/// A strict 50 MB storage limit is enforced using an oldest-saved-first eviction strategy.
-/// The budget is re-enforced whenever asynchronous image downloads complete, ensuring
-/// the total never exceeds the limit even when image sizes are updated post-save.
+/// Articles are persisted with their full text content, and their images are
+/// downloaded into the app's own storage so they stay available offline after
+/// force quitting, relaunching, or weeks of not opening the app. A strict
+/// 50 MB storage limit is enforced using an oldest-saved-first eviction
+/// strategy, counting the real size of every image file on disk. The budget is
+/// re-enforced whenever an image download completes.
 final class FavoritesManager: FavoritesManagerProtocol {
+    typealias ImageDownloader = (URL, @escaping (Data?) -> Void) -> Void
+
     private let storage: Storage<String, [SavedArticleRecord]>?
     private let defaults: UserDefaults
+    private let imageStore: SavedImageStoreProtocol
+    private let imageDownloader: ImageDownloader
     private let widgetSync: WidgetSyncManagerProtocol?
     private let logger: XCGLogger
     private let legacyKey = AppConstants.Favorites.storageKey
@@ -44,22 +48,22 @@ final class FavoritesManager: FavoritesManagerProtocol {
     let storageLimitBytes: Int64
 
     private let lock = NSRecursiveLock()
-    private let persistenceQueue = DispatchQueue(label: "com.jayprajapati.articles.savedPersistence", qos: .utility)
     private var records: [SavedArticleRecord] = []
-
-    /// Injection hooks for unit testing image caching without network requests.
-    var imageDownloader: ((URL, @escaping (Int64) -> Void) -> Void)?
-    var imageRemover: ((URL) -> Void)?
+    private var downloadingImageIDs: Set<String> = []
 
     init(
         defaults: UserDefaults = .standard,
         storageName: String = AppConstants.SavedArticles.storageName,
         storageLimitBytes: Int64 = AppConstants.SavedArticles.maxStorageBytes,
+        imageStore: SavedImageStoreProtocol = SavedImageStore(),
+        imageDownloader: @escaping ImageDownloader = FavoritesManager.downloadImage,
         widgetSync: WidgetSyncManagerProtocol? = nil,
         logger: XCGLogger = LoggerFactory.makeLogger()
     ) {
         self.defaults = defaults
         self.storageLimitBytes = storageLimitBytes
+        self.imageStore = imageStore
+        self.imageDownloader = imageDownloader
         self.widgetSync = widgetSync
         self.logger = logger
 
@@ -75,6 +79,7 @@ final class FavoritesManager: FavoritesManagerProtocol {
         }
 
         loadPersistedRecords()
+        reconcileImages()
         widgetSync?.updateSavedArticles(savedArticles())
     }
 
@@ -87,11 +92,11 @@ final class FavoritesManager: FavoritesManagerProtocol {
     }
 
     func save(_ article: Article) {
-        let shouldCacheImage: Bool = {
+        let needsImage: Bool = {
             lock.lock()
             defer { lock.unlock() }
 
-            // If already saved, update savedAt timestamp and persist
+            // Already saved: move it to the front and keep its image.
             if let index = records.firstIndex(where: { $0.article.identifier == article.identifier }) {
                 let existing = records[index]
                 let updated = SavedArticleRecord(article: article, savedAt: Date(), imageByteSize: existing.imageByteSize)
@@ -99,12 +104,12 @@ final class FavoritesManager: FavoritesManagerProtocol {
                 records.insert(updated, at: 0)
                 persistRecords()
                 notifyChange()
-                return false
+                return existing.imageByteSize == 0
             }
 
             let newRecord = SavedArticleRecord(article: article, savedAt: Date(), imageByteSize: 0)
 
-            // Enforce 50 MB storage limit before adding
+            // Enforce the storage limit before adding
             enforceLimit(freeing: newRecord.totalByteSize)
 
             records.insert(newRecord, at: 0)
@@ -113,9 +118,8 @@ final class FavoritesManager: FavoritesManagerProtocol {
             return true
         }()
 
-        if shouldCacheImage {
-            // Cache image to disk for offline access without holding lock
-            cacheImageForOffline(article: article)
+        if needsImage {
+            downloadImageIfNeeded(for: article)
         }
     }
 
@@ -126,7 +130,7 @@ final class FavoritesManager: FavoritesManagerProtocol {
         guard let index = records.firstIndex(where: { $0.article.identifier == article.identifier }) else { return }
         let removed = records.remove(at: index)
         persistRecords()
-        cleanupImage(for: removed.article)
+        imageStore.remove(for: removed.article.identifier)
         notifyChange()
     }
 
@@ -147,6 +151,11 @@ final class FavoritesManager: FavoritesManagerProtocol {
         return records.map(\.article)
     }
 
+    func savedImageURL(for article: Article) -> URL? {
+        guard isSaved(article) else { return nil }
+        return imageStore.imageURL(for: article.identifier)
+    }
+
     var totalStorageBytes: Int64 {
         lock.lock()
         defer { lock.unlock() }
@@ -157,16 +166,14 @@ final class FavoritesManager: FavoritesManagerProtocol {
         lock.lock()
         defer { lock.unlock() }
 
-        for record in records {
-            cleanupImage(for: record.article)
-        }
         records.removeAll()
+        imageStore.removeAll()
         try? storage?.removeAll()
         syncLegacyDefaults()
         notifyChange()
     }
 
-    // MARK: - Internal Helpers
+    // MARK: - Budget
 
     private func enforceLimit(freeing neededBytes: Int64 = 0) {
         var currentTotal = records.reduce(0) { $0 + $1.totalByteSize }
@@ -178,88 +185,115 @@ final class FavoritesManager: FavoritesManagerProtocol {
             }
             records.remove(at: oldestIndex)
             currentTotal -= oldestRecord.totalByteSize
-            cleanupImage(for: oldestRecord.article)
-            logger.info("Evicted oldest saved article '\(oldestRecord.article.title ?? "")' to stay within 50MB limit")
+            imageStore.remove(for: oldestRecord.article.identifier)
+            logger.info("Evicted oldest saved article '\(oldestRecord.article.title ?? "")' to stay within the storage limit")
         }
     }
 
     /// Removes a single record whose total size alone exceeds the storage limit.
-    /// This handles the edge case where an article's image download completes and
-    /// pushes the individual record over the entire budget.
     private func evictOversizedRecord(identifier: String) {
         guard let index = records.firstIndex(where: { $0.article.identifier == identifier }) else { return }
         let record = records[index]
         if record.totalByteSize > storageLimitBytes {
             records.remove(at: index)
-            cleanupImage(for: record.article)
+            imageStore.remove(for: record.article.identifier)
             logger.warning("Removed article '\(record.article.title ?? "")' because its total size (\(record.totalByteSize) bytes) exceeds the \(storageLimitBytes) byte limit")
         }
     }
 
-    private func cacheImageForOffline(article: Article) {
+    // MARK: - Images
+
+    /// Fetches the article's image into the app's own storage, once.
+    private func downloadImageIfNeeded(for article: Article) {
         guard let urlString = article.urlToImage, let url = URL(string: urlString) else { return }
+        let identifier = article.identifier
 
-        if let imageDownloader = self.imageDownloader {
-            imageDownloader(url) { [weak self] downloadedBytes in
-                self?.updateImageByteSize(for: article.identifier, size: downloadedBytes)
-            }
-            return
-        }
+        let shouldStart: Bool = {
+            lock.lock()
+            defer { lock.unlock() }
+            return downloadingImageIDs.insert(identifier).inserted
+        }()
+        guard shouldStart else { return }
 
-        // Production Kingfisher offline caching dispatches callback to persistence queue
-        KingfisherManager.shared.retrieveImage(
-            with: url,
-            options: [
-                .cacheOriginalImage,
-                .callbackQueue(.dispatch(persistenceQueue))
-            ]
-        ) { [weak self] result in
-            guard let self else { return }
-            switch result {
-            case .success(let value):
-                let size: Int64
-                if let data = value.data() {
-                    size = Int64(data.count)
-                } else if let cgImage = value.image.cgImage {
-                    size = Int64(cgImage.bytesPerRow * cgImage.height)
-                } else {
-                    size = 120_000
-                }
-                self.updateImageByteSize(for: article.identifier, size: size)
-            case .failure(let error):
-                self.logger.warning("Failed to prefetch image for offline storage: \(error)")
-            }
+        imageDownloader(url) { [weak self] data in
+            self?.storeDownloadedImage(data, for: identifier)
         }
     }
 
-    private func updateImageByteSize(for identifier: String, size: Int64) {
+    private func storeDownloadedImage(_ data: Data?, for identifier: String) {
         lock.lock()
         defer { lock.unlock() }
 
+        downloadingImageIDs.remove(identifier)
+        // The article may have been removed while the download was running.
         guard let index = records.firstIndex(where: { $0.article.identifier == identifier }) else { return }
-        records[index].imageByteSize = size
+        guard let data, !data.isEmpty else {
+            logger.warning("Image for saved article '\(records[index].article.title ?? "")' could not be downloaded; it stays saved without one")
+            return
+        }
 
-        // Re-enforce storage limit now that the true image size is known.
-        // First check if this single record exceeds the entire budget.
+        let bytes = imageStore.save(data, for: identifier)
+        guard bytes > 0 else {
+            logger.error("Image for saved article '\(records[index].article.title ?? "")' could not be written to disk")
+            return
+        }
+        records[index].imageByteSize = bytes
+
+        // Re-enforce the storage limit now that the true image size is known.
         evictOversizedRecord(identifier: identifier)
-        // Then ensure the overall total is still within limits.
         enforceLimit()
 
         persistRecords()
         notifyChange()
     }
 
-    private func cleanupImage(for article: Article) {
-        guard let urlString = article.urlToImage, let url = URL(string: urlString) else { return }
+    /// Brings the records in line with what is actually on disk: sizes are
+    /// re-read from the files, and images that are missing (a download that
+    /// never finished, for instance) are fetched again.
+    private func reconcileImages() {
+        let missing: [Article] = {
+            lock.lock()
+            defer { lock.unlock() }
 
-        if let imageRemover = self.imageRemover {
-            imageRemover(url)
-        } else {
-            persistenceQueue.async {
-                ImageCache.default.removeImage(forKey: url.absoluteString, fromDisk: true)
+            var changed = false
+            for index in records.indices {
+                let actual = imageStore.byteSize(for: records[index].article.identifier)
+                if records[index].imageByteSize != actual {
+                    records[index].imageByteSize = actual
+                    changed = true
+                }
             }
+            if changed {
+                enforceLimit()
+                persistRecords()
+            }
+            return records.filter { $0.imageByteSize == 0 && $0.article.urlToImage != nil }.map(\.article)
+        }()
+
+        for article in missing {
+            downloadImageIfNeeded(for: article)
         }
     }
+
+    private static let session: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = AppConstants.Network.requestTimeout
+        configuration.timeoutIntervalForResource = AppConstants.Network.resourceTimeout
+        return URLSession(configuration: configuration)
+    }()
+
+    static func downloadImage(from url: URL, completion: @escaping (Data?) -> Void) {
+        session.dataTask(with: url) { data, response, _ in
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 200
+            guard (200..<300).contains(status), let data, !data.isEmpty else {
+                completion(nil)
+                return
+            }
+            completion(data)
+        }.resume()
+    }
+
+    // MARK: - Persistence
 
     private func loadPersistedRecords() {
         lock.lock()
@@ -267,7 +301,7 @@ final class FavoritesManager: FavoritesManagerProtocol {
 
         if let storage, let loaded = try? storage.object(forKey: storageKey) {
             records = loaded
-            logger.debug("Loaded \(records.count) saved article(s) from disk cache")
+            logger.debug("Loaded \(records.count) saved article(s) from disk")
         } else {
             records = []
         }
@@ -299,4 +333,3 @@ final class FavoritesManager: FavoritesManagerProtocol {
         }
     }
 }
-

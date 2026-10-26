@@ -42,7 +42,7 @@ xcodebuild test -workspace Articles.xcworkspace -scheme Articles \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
 ```
 
-*All 93 unit tests pass with zero failures (`** TEST SUCCEEDED **`).*
+*All 106 unit tests pass with zero failures (`** TEST SUCCEEDED **`).*
 
 ---
 
@@ -52,7 +52,7 @@ xcodebuild test -workspace Articles.xcworkspace -scheme Articles \
 | --- | --- |
 | **Article List** | Storyboard scene, `UICollectionView` with XIB cells, list and grid layouts, inline search, and pull-to-refresh. |
 | **Article Detail** | Storyboard scene following the Figma frame, favourite/save toggle, opens full article in `SFSafariViewController`. |
-| **Save for Later (Feature 1)** | Dedicated Saved list, offline text and image persistence across app restarts, and 50 MB oldest-saved-first storage budget management with async re-enforcement. |
+| **Save for Later (Feature 1)** | Dedicated Saved list; article text and image stored by the app itself (images under Application Support, not an image cache) so they survive restarts and cache expiry; 50 MB oldest-saved-first storage budget counted from the real file sizes. |
 | **Infinite Scroll (Feature 2 - Option A)** | Pagination simulated inside `ArticlesProvider` (10 articles per page, as if the server paginated); `ArticlesManager` loads the next page on demand, including offline from the cache; the list shows a footer indicator while a page loads. |
 | **Interactive Widget (Feature 2 - Option B)** | WidgetKit extension with `.systemSmall`, `.systemMedium`, `.systemLarge` sizes, fed only by the app through an App Group (last opened, saved and latest articles with their images), interactive AppIntents (Next/Prev cycling), and deep linking (`articles://open?id=...`). |
 | **SwiftUI Integration** | `ContentStateView` (loading skeleton, offline, error, empty, no results, iPad placeholder) hosted via `UIHostingController`. |
@@ -73,13 +73,17 @@ xcodebuild test -workspace Articles.xcworkspace -scheme Articles \
 
 Users can save articles to read offline from both the list card and the detail screen.
 
-- **Offline Persistence**: Both article metadata and images are stored locally using `FavoritesManager`. When offline, saved articles load instantly with full text and cached images, even after a cold app relaunch.
+- **Offline Persistence**: `FavoritesManager` persists the article record (title, description, content, metadata) with the `Cache` pod and downloads the article's image into the app's own `SavedImageStore` under `Library/Application Support/SavedArticles/Images`. That folder is not purged by the system and has no expiry, unlike Kingfisher's cache (which expires after 7 days and lives in `Caches`). When offline, saved articles open with their text and image, even after a cold relaunch or weeks without using the app.
+  - The list and detail screens load a saved article's image from that file first (`RemoteImageView.setImage(with:localFile:)`), so no network or cache lookup is involved.
+  - If a download did not finish (the app was killed, or the article was saved offline), the article stays saved without an image and the image is fetched again on the next launch.
+  - Removing an article, eviction, and "clear all" delete the corresponding files.
 - **Dedicated Saved Area**: Accessible via the navigation bar bookmark icon on the home screen, presenting saved articles in a dedicated collection.
 - **50 MB Storage Budget Decision**:
   - The brief dictates that saved content is limited to **50 MB**.
   - **Eviction Strategy**: Implemented an **oldest-saved-first** eviction policy in `FavoritesManager`.
-  - When the cumulative size of saved articles and images reaches or exceeds 50 MB (50,000,000 bytes), saving a new article automatically evicts the oldest saved article and deletes its cached image from disk until the total size is back within the safe budget.
-  - **Async Image Re-enforcement**: Because image downloads complete asynchronously after an article is saved, the storage budget is **re-enforced whenever image sizes are updated**. This prevents the total from silently exceeding 50 MB when large images finish downloading.
+  - When the cumulative size of saved articles and images would exceed 50 MB (52,428,800 bytes), saving a new article evicts the oldest saved article and deletes its image file until the total is back within budget.
+  - **Real sizes**: every image counts with the exact number of bytes its file occupies on disk, read back from the file system. Sizes are re-read on launch so the budget never drifts from reality.
+  - **Async Image Re-enforcement**: Because image downloads complete asynchronously after an article is saved, the storage budget is **re-enforced whenever an image lands on disk**. This prevents the total from silently exceeding 50 MB when large images finish downloading.
   - **Single Article Exceeding Limit**: If a single article's total size (metadata + image) exceeds the entire 50 MB budget, it is automatically removed from saved storage to prevent permanently consuming the budget.
   - The behavior is covered by automated unit tests (`test50MBStorageLimitEvictsOldestArticleWhenExceeded`, `testAsyncImageSizeUpdateReEnforcesStorageLimit`, `testSingleArticleExceedingBudgetIsEvicted`).
 
@@ -136,7 +140,7 @@ Articles/
 │   ├── Client/              NetworkClient, NetworkError (+ mapper), NetworkEventLogger, ReachabilityProvider, Endpoint
 │   └── Core/                ArticlesProvider
 ├── Managers/
-│   ├── Client/              SharedArticleStore, Cache/ (ArticlesCache), Constants/, Utilities/
+│   ├── Client/              SharedArticleStore, SavedImageStore (+ protocol), Cache/ (ArticlesCache), Constants/, Utilities/
 │   └── Core/                ArticlesManager, ConnectivityManager, FavoritesManager, WidgetSyncManager (+ protocols)
 ├── ViewControllers/
 │   ├── Client/              AppRouter, ViewControllerFactory, BannerPresenter, GlassHelper, ArticleDisplay
@@ -180,14 +184,15 @@ The feed contains 79 articles with deliberate edge cases, all gracefully handled
 
 ## Automated Unit Testing
 
-The test suite covers **93 unit tests** with 100% pass rate:
+The test suite covers **106 unit tests** with 100% pass rate:
 
 - **`ArticleDecodingTests`** (8 tests): Fault-tolerant decoding of missing, null, empty and mistyped fields and malformed array elements.
 - **`ArticlePresentationTests`** (21 tests): Date parsing, link validation, display fallbacks, search filtering, section filter, `SharedArticleStore` (save/load, cycling and wrap-around, index reset when the list shrinks, per-article images and pruning, inert without a container) and deep link construction.
 - **`ArticlesManagerTests`** (15 tests): First page caching, cache fallback on failure, next pages appended and cached, failed page retry, reload discarding later pages, offline paging from the cache, lookups ignoring paging, and widget publishing.
 - **`ArticlesProviderTests`** (11 tests): Page slicing, `hasMore`, snapshot reuse with simulated latency, page 1 refreshing the snapshot, boundary pages, empty feed, invalid page numbers, filtering of empty articles, invalid JSON and network errors, endpoint security.
 - **`ConnectivityManagerTests`** (3 tests): Reachability state changes, observation unregistering, and debounce logic.
-- **`FavoritesManagerTests`** (15 tests): Full model persistence, 50 MB storage budget eviction, async image size re-enforcement, single-article-over-budget handling, image cleanup on deletion, concurrent thread safety, ordering, and widget publishing.
+- **`FavoritesManagerTests`** (21 tests): Full model persistence, images downloaded into the app's store with their real size, image file deleted on removal and eviction, failed and late downloads, missing images fetched again on launch, sizes re-read from disk, 50 MB budget eviction, async re-enforcement, single-article-over-budget handling, concurrent thread safety, ordering, and widget publishing.
+- **`SavedImageStoreTests`** (7 tests): File written under Application Support with its real size, replace, remove, remove all, empty data rejected, unknown article has no image.
 - **`WidgetSyncManagerTests`** (20 tests): List composition (last opened, saved, latest; de-duplication; cap of 10; title fallbacks), single publish with one reload, image download de-duplication, failed downloads, coalescing of launch-time updates, no pruning or index reset on relaunch, last opened persistence, and JPEG downsampling.
 
 ---

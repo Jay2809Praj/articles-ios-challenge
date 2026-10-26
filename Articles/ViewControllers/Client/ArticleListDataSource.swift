@@ -51,6 +51,8 @@ final class ArticleListDataSource: NSObject, UICollectionViewDataSource {
     var onReadMore: ((Article) -> Void)?
     /// Checks whether an article is currently saved.
     var isSaved: ((Article) -> Bool)?
+    /// The app's own image file for a saved article, if any.
+    var savedImageURL: ((Article) -> URL?)?
     /// Called when the save button on a card is tapped.
     var onToggleSave: ((Article) -> Void)?
 
@@ -83,17 +85,18 @@ final class ArticleListDataSource: NSObject, UICollectionViewDataSource {
         let article = articles[indexPath.item]
         let display = ArticleDisplay(article: article)
         let isArticleSaved = isSaved?(article) ?? false
+        let localImageURL = savedImageURL?(article)
 
         switch layoutMode {
         case .list:
             let cell = collectionView.dequeue(ArticleCardCell.self, for: indexPath)
-            cell.configure(with: display, isSaved: isArticleSaved)
+            cell.configure(with: display, isSaved: isArticleSaved, localImageURL: localImageURL)
             cell.onReadMore = { [weak self] in self?.onReadMore?(article) }
             cell.onToggleSave = { [weak self] in self?.onToggleSave?(article) }
             return cell
         case .grid:
             let cell = collectionView.dequeue(ArticleGridCell.self, for: indexPath)
-            cell.configure(with: display, isSaved: isArticleSaved)
+            cell.configure(with: display, isSaved: isArticleSaved, localImageURL: localImageURL)
             cell.onToggleSave = { [weak self] in self?.onToggleSave?(article) }
             return cell
         }
