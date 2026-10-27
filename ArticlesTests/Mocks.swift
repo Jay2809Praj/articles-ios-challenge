@@ -3,14 +3,21 @@ import Foundation
 import XCGLogger
 
 /// Plays a paginating server over an in-memory feed.
-final class MockArticlesProvider: ArticlesProviderProtocol {
-    var feed: Result<[Article], NetworkError> = .success([])
+final class MockArticlesProvider: ArticlesProviderProtocol, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _feed: Result<[Article], NetworkError> = .success([])
+    private var _requestedPages: [Int] = []
+
+    var feed: Result<[Article], NetworkError> {
+        get { lock.withLock { _feed } }
+        set { lock.withLock { _feed = newValue } }
+    }
     /// Pages that fail with the given error instead of answering.
     var failingPages: [Int: NetworkError] = [:]
-    private(set) var requestedPages: [Int] = []
+    var requestedPages: [Int] { lock.withLock { _requestedPages } }
 
     func fetchArticles(page: Int, pageSize: Int) async throws -> ArticlesPage {
-        requestedPages.append(page)
+        lock.withLock { _requestedPages.append(page) }
         if let error = failingPages[page] { throw error }
         let all = try feed.get()
         let start = min((page - 1) * pageSize, all.count)
@@ -19,8 +26,59 @@ final class MockArticlesProvider: ArticlesProviderProtocol {
     }
 }
 
-final class MockArticlesCache: ArticlesCacheProtocol {
-    var stored: CachedArticles?
+/// A provider that holds every request until the test answers it, so
+/// overlapping requests can be finished in any order.
+final class GatedArticlesProvider: ArticlesProviderProtocol, @unchecked Sendable {
+    private let lock = NSLock()
+    private var waiting: [(page: Int, continuation: CheckedContinuation<ArticlesPage, Error>)] = []
+    private var _requestedPages: [Int] = []
+
+    var requestedPages: [Int] { lock.withLock { _requestedPages } }
+
+    func fetchArticles(page: Int, pageSize: Int) async throws -> ArticlesPage {
+        try await withCheckedThrowingContinuation { continuation in
+            lock.withLock {
+                _requestedPages.append(page)
+                waiting.append((page, continuation))
+            }
+        }
+    }
+
+    /// Returns once `count` requests have been made in total, or after two
+    /// seconds so a regression fails an assertion instead of hanging.
+    func waitForRequests(_ count: Int) async {
+        let deadline = Date().addingTimeInterval(2)
+        while requestedPages.count < count, Date() < deadline {
+            try? await Task.sleep(nanoseconds: 1_000_000)
+        }
+    }
+
+    /// Answers the oldest waiting request, whatever page it asked for.
+    func answerNext(with articles: [Article], hasMore: Bool) {
+        let request: (page: Int, continuation: CheckedContinuation<ArticlesPage, Error>)? = lock.withLock {
+            waiting.isEmpty ? nil : waiting.removeFirst()
+        }
+        request?.continuation.resume(returning: ArticlesPage(articles: articles, page: request?.page ?? 0, hasMore: hasMore))
+    }
+
+    /// Answers the oldest waiting request for `page`.
+    func answer(page: Int, with articles: [Article], hasMore: Bool) {
+        let continuation: CheckedContinuation<ArticlesPage, Error>? = lock.withLock {
+            guard let index = waiting.firstIndex(where: { $0.page == page }) else { return nil }
+            return waiting.remove(at: index).continuation
+        }
+        continuation?.resume(returning: ArticlesPage(articles: articles, page: page, hasMore: hasMore))
+    }
+}
+
+final class MockArticlesCache: ArticlesCacheProtocol, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _stored: CachedArticles?
+
+    var stored: CachedArticles? {
+        get { lock.withLock { _stored } }
+        set { lock.withLock { _stored = newValue } }
+    }
 
     func save(_ articles: [Article]) {
         stored = CachedArticles(articles: articles, savedAt: Date())
@@ -109,6 +167,8 @@ final class MockWidgetSyncManager: WidgetSyncManagerProtocol {
     func updateLastOpenedArticle(_ article: Article) {
         lastOpenedUpdates.append(article)
     }
+
+    var lastOpenedArticle: Article? { lastOpenedUpdates.last }
 }
 
 extension SharedArticleStore {

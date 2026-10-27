@@ -30,6 +30,9 @@ final class ArticleListViewController: UIViewController {
     private var nextPageTask: Task<Void, Never>?
     private var currentHasFooter = false
     private var loadTask: Task<Void, Never>?
+    /// Whether the full-area state should be showing. The views' own
+    /// `isHidden` lags behind while the cross-fade runs.
+    private var isStateVisible = false
     private var connectivityObservation: ConnectivityObservation?
     private var savedObserver: NSObjectProtocol?
     private var evictionObserver: NSObjectProtocol?
@@ -266,7 +269,11 @@ final class ArticleListViewController: UIViewController {
         if isOnline {
             bannerPresenter.unpin()
             bannerPresenter.toast(.backOnline)
-            loadArticles()
+            // Fresh pages from the network stay as they are; only stale,
+            // failed or empty content, or a load still running, is redone.
+            if loadTask != nil || latestResult?.needsRefreshWhenOnline ?? true {
+                loadArticles()
+            }
         } else if currentFilter == .saved {
             // Saved articles remain 100% accessible offline
             render()
@@ -341,13 +348,17 @@ final class ArticleListViewController: UIViewController {
     }
 
     private func setStateVisible(_ visible: Bool) {
-        guard stateContainer.isHidden == visible else { return }
+        // Starts `false`: the storyboard hides the state container.
+        guard isStateVisible != visible else { return }
+        isStateVisible = visible
         stateContainer.isHidden = false
         collectionView.isHidden = false
         UIView.animate(withDuration: 0.25, delay: 0, options: [.beginFromCurrentState]) {
             self.stateContainer.alpha = visible ? 1 : 0
             self.collectionView.alpha = visible ? 0 : 1
         } completion: { _ in
+            // A newer change may have reversed this one mid-fade.
+            guard self.isStateVisible == visible else { return }
             self.stateContainer.isHidden = !visible
             self.collectionView.isHidden = visible
         }

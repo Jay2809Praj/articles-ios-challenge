@@ -247,6 +247,14 @@ final class WidgetSyncManagerTests: XCTestCase {
         XCTAssertEqual(store.loadArticles().map(\.title), ["Article 7", "Article 1", "Article 2"])
     }
 
+    func testLastOpenedArticleIsAvailableForDeepLinksAfterARelaunch() {
+        XCTAssertNil(manager.lastOpenedArticle)
+        manager.updateLastOpenedArticle(article(7))
+
+        XCTAssertEqual(manager.lastOpenedArticle, article(7))
+        XCTAssertEqual(makeManager().lastOpenedArticle, article(7), "A widget tap after a relaunch can still find it")
+    }
+
     // MARK: - Coalescing launch-time updates
 
     func testBurstOfUpdatesPublishesOnceWithTheCompleteList() {

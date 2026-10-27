@@ -50,13 +50,18 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let webURL = queryItems.first(where: { $0.name == "url" })?.value
         guard identifier != nil || webURL != nil else { return }
 
-        // Saved articles stay available even when the feed cache is gone.
-        let known = favoritesManager.savedArticles() + articlesManager.allCachedArticles()
+        // Saved articles stay available even when the feed cache is gone, and
+        // the widget can still show the last opened article after a refresh
+        // pushed it out of the cache.
+        let lastOpened = appDelegate.container.resolve(WidgetSyncManagerProtocol.self)?.lastOpenedArticle
+        let known = favoritesManager.savedArticles() + articlesManager.allCachedArticles() + [lastOpened].compactMap { $0 }
         if let match = Self.article(in: known, identifier: identifier, webURL: webURL) {
             router.showArticleDetail(for: match)
             return
         }
 
+        // On a cold launch the list is loading page 1 at this moment; the
+        // manager hands this call the same request rather than a second one.
         Task { @MainActor in
             let result = await articlesManager.loadArticles()
             if let match = Self.article(in: result.articles, identifier: identifier, webURL: webURL) {

@@ -11,4 +11,8 @@ protocol WidgetSyncManagerProtocol: AnyObject {
 
     /// The article the user just opened; the widget shows it first.
     func updateLastOpenedArticle(_ article: Article)
+
+    /// The article last opened, kept across launches. The widget can show it
+    /// after it has left the feed cache, so deep links look here too.
+    var lastOpenedArticle: Article? { get }
 }

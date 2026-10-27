@@ -68,6 +68,10 @@ final class WidgetSyncManager: WidgetSyncManagerProtocol {
         }
     }
 
+    var lastOpenedArticle: Article? {
+        queue.sync { lastOpened }
+    }
+
     func updateLastOpenedArticle(_ article: Article) {
         queue.async {
             guard article.identifier != self.lastOpened?.identifier else { return }

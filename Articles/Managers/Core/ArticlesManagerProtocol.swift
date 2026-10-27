@@ -24,6 +24,13 @@ struct ArticlesLoadResult: Equatable {
         if case .cache = origin { return true }
         return false
     }
+
+    /// Whether this list is worth asking for again once the connection
+    /// returns: it came from disk, the request failed, or there is nothing to
+    /// show. A fresh list from the network is kept, with its loaded pages.
+    var needsRefreshWhenOnline: Bool {
+        isStale || error != nil || articles.isEmpty
+    }
 }
 
 /// The single entry point view controllers use to obtain articles.
@@ -34,7 +41,9 @@ protocol ArticlesManagerProtocol {
     func cachedArticles() -> ArticlesLoadResult?
 
     /// Requests the first page afresh, falling back to the cached list on
-    /// failure. Anything loaded by earlier calls is discarded.
+    /// failure. Anything loaded by earlier calls is discarded. Calls made
+    /// while page 1 is already loading wait for that request instead of
+    /// sending another one.
     func loadArticles() async -> ArticlesLoadResult
 
     /// Appends the next page to what is loaded. When nothing more is available

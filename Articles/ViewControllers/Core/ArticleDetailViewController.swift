@@ -23,11 +23,16 @@ final class ArticleDetailViewController: UIViewController {
     private let favoritesManager: FavoritesManagerProtocol
     private let widgetSync: WidgetSyncManagerProtocol?
     private weak var router: ArticleRouting?
+    /// The favourite state the button shows, so it only bounces on a change.
+    private var shownFavoriteState: Bool?
     private lazy var bannerPresenter = BannerPresenter(hostView: view, above: readFullArticleButton)
     private var savedObserver: NSObjectProtocol?
     private var evictionObserver: NSObjectProtocol?
 
     override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
+
+    /// `Article.identifier` of the article on screen.
+    var articleIdentifier: String { article.identifier }
 
     /// Where the hero image sits, in the view's coordinates – the zoom
     /// transition lands the card's image exactly here.
@@ -202,10 +207,13 @@ final class ArticleDetailViewController: UIViewController {
 
     private func renderFavoriteState(animated: Bool) {
         let isFavorite = favoritesManager.isFavorite(article)
+        // The tap and the change notification that follows it both land here.
+        let changed = shownFavoriteState != nil && shownFavoriteState != isFavorite
+        shownFavoriteState = isFavorite
         favoriteButton.setImage(isFavorite ? AppIcon.favoriteRemove : AppIcon.favoriteAdd, for: .normal)
         favoriteButton.accessibilityLabel = isFavorite ? "Remove from favourites" : "Add to favourites"
 
-        guard animated else { return }
+        guard animated, changed else { return }
         favoriteButton.transform = CGAffineTransform(scaleX: 0.7, y: 0.7)
         UIView.animate(
             withDuration: 0.45,

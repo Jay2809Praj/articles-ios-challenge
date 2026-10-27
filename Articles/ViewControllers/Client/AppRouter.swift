@@ -59,9 +59,29 @@ final class AppRouter: NSObject, ArticleRouting {
         }
     }
 
-    /// Direct presentation of article detail used by deep linking (e.g. from Widget).
+    /// Opens an article from outside the app, such as a widget tap. Whatever
+    /// is on screen gives way: Safari is closed and an open detail is
+    /// replaced, so repeated taps never stack detail screens.
     func showArticleDetail(for article: Article) {
-        showDetail(for: article, sourceViewProvider: { nil })
+        let show = { [weak self] in
+            guard let self else { return }
+            if self.visibleDetail?.articleIdentifier == article.identifier { return }
+            if self.splitViewController.isCollapsed {
+                self.primaryNavigation.popToRootViewController(animated: false)
+            }
+            self.showDetail(for: article, sourceViewProvider: { nil })
+        }
+        if splitViewController.presentedViewController != nil {
+            splitViewController.dismiss(animated: false, completion: show)
+        } else {
+            show()
+        }
+    }
+
+    /// The detail screen the user is looking at, in either column.
+    private var visibleDetail: ArticleDetailViewController? {
+        let navigation = splitViewController.isCollapsed ? primaryNavigation : secondaryNavigation
+        return navigation.topViewController as? ArticleDetailViewController
     }
 
     func closeDetail() {

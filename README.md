@@ -12,7 +12,7 @@ An iOS / iPadOS app that lists articles from an API, displays detailed reading v
 
 | Tool | Version |
 | --- | --- |
-| Xcode | 16.0 or newer |
+| Xcode | 26 (built and tested with 26.6; the Liquid Glass APIs need the iOS 26 SDK) |
 | iOS Deployment Target | 18.0 |
 | CocoaPods | 1.16 or newer |
 | Swift | 5.0 |
@@ -42,7 +42,7 @@ xcodebuild test -workspace Articles.xcworkspace -scheme Articles \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
 ```
 
-*All 115 unit tests pass with zero failures (`** TEST SUCCEEDED **`).*
+*All 128 unit tests pass with zero failures (`** TEST SUCCEEDED **`).*
 
 ---
 
@@ -120,7 +120,7 @@ To provide a complete, industry-grade implementation, both optional features wer
   - **Next (`>`)** and **Previous (`<`)** buttons cycle through the published list without launching the app, via `NextArticleIntent` and `PreviousArticleIntent`. Opening an article in the app brings the widget back to that article; a plain refresh leaves the browse position alone.
 - **Deep Linking**:
   - Tapping the widget sends `articles://open?id=<article identifier>`.
-  - `SceneDelegate` looks the identifier up among the saved and cached articles (falling back to a fresh load) and asks `AppRouter` to show that article's detail view. `articles://open` without an identifier simply opens the app.
+  - `SceneDelegate` looks the identifier up by exact match among the saved articles, the cached feed and the last opened article, falling back to the list's own page-1 request. `AppRouter` then closes Safari if it is open and replaces any open detail screen, so repeated widget taps never stack screens. `articles://open` without an identifier simply opens the app.
 
 ---
 
@@ -181,22 +181,42 @@ The feed contains 79 articles with deliberate edge cases, all gracefully handled
 | Offline with cache | Displays cached articles with pinned "You're offline" banner. |
 | Offline with empty cache | Displays full-screen offline illustration with Retry action. |
 | Request failure while online | Displays cache with toast notice, or error state with Retry. |
-| Connection restored | Automatically dismisses offline banner and refreshes list. |
+| Connection restored | Dismisses the offline banner. Reloads only when the list on screen came from the cache, failed or is empty; fresh pages from the network are kept, with their scroll position. |
+
+---
+
+## Part 1 Review: Found and Fixed
+
+A critical pass over the Part 1 code before this submission. Each item names what was wrong and what changed. The behavioural fixes are covered by unit tests that were run against the previous code first and failed there.
+
+| Found | Fixed |
+| --- | --- |
+| Deep links matched articles by fuzzy title comparison, so two articles with similar titles could open the wrong one. | `SceneDelegate` matches on the exact `Article.identifier` (or exact `url`), looking in the saved articles, the cached feed and the last opened article before falling back to a network load. |
+| Every reconnect reloaded page 1, even when the list on screen had just come from the network. The user lost their scroll position and the loaded pages, and the app sent a request it did not need. | `ArticlesLoadResult.needsRefreshWhenOnline`: a reconnect reloads only when the content is cached, failed, empty or still loading. Fresh pages stay as they are. |
+| A next page that was in flight when the user pulled to refresh was appended to the *new* list when it arrived, duplicating articles and corrupting the cache. | `ArticlesManager` stamps each list with a generation; a page from an earlier generation is dropped and paging continues from the new list. |
+| A cold launch from a widget tap sent two page-1 requests at once (the list screen's and the deep link's); a reconnect during a load sent a third. | `loadArticles()` shares one in-flight page-1 request between all callers. |
+| Repeated widget taps pushed a new detail screen on top of the previous one, and a tap while Safari was open did nothing visible. | `AppRouter.showArticleDetail` dismisses Safari, pops to the list and shows the article once; a tap for the article already on screen is a no-op. |
+| Pinning the offline banner while a "Back online" toast was still running left a cancelled timer behind, so the next `unpin()` did nothing and the offline banner stayed on screen. | `BannerPresenter.pin` clears the toast timer it cancels. |
+| Typing in search faster than the 0.25 s cross-fade could leave the list and the "No results" overlay both hidden or both visible, because the guard read `isHidden` mid-animation. | The list screen tracks the intended state itself and a completion that lost a race no longer applies its stale `isHidden` values. |
+| The favourite button bounced twice per tap: once from the tap and once from the change notification that followed. | The detail screen animates only when the shown state actually changed. |
+| The README asked for Xcode 16, but the project uses Liquid Glass APIs that need the iOS 26 SDK. | The requirement says Xcode 26, matching the build that was tested. |
 
 ---
 
 ## Automated Unit Testing
 
-The test suite covers **115 unit tests** with 100% pass rate:
+The test suite covers **128 unit tests** with 100% pass rate:
 
 - **`ArticleDecodingTests`** (8 tests): Fault-tolerant decoding of missing, null, empty and mistyped fields and malformed array elements.
 - **`ArticlePresentationTests`** (25 tests): Storage size formatting, limit override from launch argument, storage-limit banner wording, Date parsing, link validation, display fallbacks, search filtering, section filter, `SharedArticleStore` (save/load, cycling and wrap-around, index reset when the list shrinks, per-article images and pruning, inert without a container) and deep link construction.
-- **`ArticlesManagerTests`** (15 tests): First page caching, cache fallback on failure, next pages appended and cached, failed page retry, reload discarding later pages, offline paging from the cache, lookups ignoring paging, and widget publishing.
+- **`ArticleListViewControllerTests`** (5 tests): The real list screen built by `ViewControllerFactory`: reconnecting keeps fresh pages without a request but reloads cached, failed or empty content, and the "No results" overlay survives typing faster than its cross-fade.
+- **`ArticlesManagerTests`** (19 tests): First page caching, cache fallback on failure, next pages appended and cached, failed page retry, reload discarding later pages, offline paging from the cache, lookups ignoring paging, widget publishing, a stale next page dropped after a refresh, overlapping page-1 calls sharing one request, and the reconnect rule.
 - **`ArticlesProviderTests`** (11 tests): Page slicing, `hasMore`, snapshot reuse with simulated latency, page 1 refreshing the snapshot, boundary pages, empty feed, invalid page numbers, filtering of empty articles, invalid JSON and network errors, endpoint security.
+- **`BannerPresenterTests`** (3 tests): A pinned banner leaves on unpin, also when it was pinned while a toast was running; unpin during a toast lets the toast finish.
 - **`ConnectivityManagerTests`** (3 tests): Reachability state changes, observation unregistering, and debounce logic.
 - **`FavoritesManagerTests`** (26 tests): Eviction notifications (titles, oldest first, too-large reason, description fallback, none without eviction), Full model persistence, images downloaded into the app's store with their real size, image file deleted on removal and eviction, failed and late downloads, missing images fetched again on launch, sizes re-read from disk, 50 MB budget eviction, async re-enforcement, single-article-over-budget handling, concurrent thread safety, ordering, and widget publishing.
 - **`SavedImageStoreTests`** (7 tests): File written under Application Support with its real size, replace, remove, remove all, empty data rejected, unknown article has no image.
-- **`WidgetSyncManagerTests`** (20 tests): List composition (last opened, saved, latest; de-duplication; cap of 10; title fallbacks), single publish with one reload, image download de-duplication, failed downloads, coalescing of launch-time updates, no pruning or index reset on relaunch, last opened persistence, and JPEG downsampling.
+- **`WidgetSyncManagerTests`** (21 tests): List composition (last opened, saved, latest; de-duplication; cap of 10; title fallbacks), single publish with one reload, image download de-duplication, failed downloads, coalescing of launch-time updates, no pruning or index reset on relaunch, last opened persistence and lookup for deep links, and JPEG downsampling.
 
 ---
 
