@@ -17,6 +17,25 @@ final class StatusBannerView: UIView, NibLoadable {
             message: "Couldn’t refresh. Showing saved articles.",
             symbolName: AppIcon.Symbol.warning
         )
+        /// What the storage limit removed, worded for the user.
+        static func storageLimit(_ eviction: SavedArticlesEviction) -> Content {
+            let first = eviction.titles.first.map { "‘\($0)’" } ?? "An article"
+            let message: String
+            switch eviction.reason {
+            case .articleTooLarge:
+                message = "\(first) is too large to save (over the 50 MB limit)."
+            case .storageFull:
+                let others = eviction.titles.count - 1
+                let removed = others > 0 ? "\(first) and \(others) more" : first
+                message = "Storage full: \(removed) removed to make room."
+            }
+            return Content(message: message, symbolName: AppIcon.Symbol.warning)
+        }
+
+        static let loadMoreFailed = Content(
+            message: "Couldn’t load more articles.",
+            symbolName: AppIcon.Symbol.warning
+        )
         static let favoriteAdded = Content(message: "Added to favourites", symbolName: AppIcon.Symbol.favorite)
         static let favoriteRemoved = Content(message: "Removed from favourites", symbolName: AppIcon.Symbol.favorite)
     }

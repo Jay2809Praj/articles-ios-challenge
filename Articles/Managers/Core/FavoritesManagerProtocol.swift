@@ -1,11 +1,50 @@
 import Foundation
 
-/// Keeps track of the articles the user saved with the heart button.
-protocol FavoritesManagerProtocol {
+/// Keeps track of the articles the user saved for reading offline later.
+protocol FavoritesManagerProtocol: AnyObject {
+    /// Checks whether an article is saved.
     func isFavorite(_ article: Article) -> Bool
+    func isSaved(_ article: Article) -> Bool
 
-    /// Flips the favourite state of an article.
-    /// - Returns: `true` when the article is a favourite after the call.
+    /// Saves an article with its full content and stores its image for offline use.
+    func save(_ article: Article)
+
+    /// Removes an article from saved storage and deletes its stored image.
+    func remove(_ article: Article)
+
+    /// Flips the saved / favourite state of an article.
+    /// - Returns: `true` when the article is saved after the call.
     @discardableResult
     func toggleFavorite(_ article: Article) -> Bool
+
+    @discardableResult
+    func toggleSave(_ article: Article) -> Bool
+
+    /// Returns all saved articles sorted by most recently saved first.
+    func savedArticles() -> [Article]
+
+    /// The image file stored for a saved article, so the UI can show it
+    /// without any network or image cache. `nil` when the article is not
+    /// saved or its image has not been stored (yet).
+    func savedImageURL(for article: Article) -> URL?
+
+    /// Total storage currently used by saved articles and their images (in bytes).
+    var totalStorageBytes: Int64 { get }
+
+    /// Maximum storage limit in bytes (50 MB).
+    var storageLimitBytes: Int64 { get }
+
+    /// Clears all saved articles and cleans up storage.
+    func clearAll()
+}
+
+extension FavoritesManagerProtocol {
+    func isFavorite(_ article: Article) -> Bool {
+        isSaved(article)
+    }
+
+    @discardableResult
+    func toggleFavorite(_ article: Article) -> Bool {
+        toggleSave(article)
+    }
 }

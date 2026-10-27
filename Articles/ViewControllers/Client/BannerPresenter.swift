@@ -28,7 +28,10 @@ final class BannerPresenter {
     /// Shows a banner that stays until `unpin()` is called.
     func pin(_ content: StatusBannerView.Content) {
         pinnedContent = content
+        // A cancelled item left behind would make `unpin()` think a toast is
+        // still running and leave the pinned banner on screen.
         dismissWorkItem?.cancel()
+        dismissWorkItem = nil
         present(content)
     }
 

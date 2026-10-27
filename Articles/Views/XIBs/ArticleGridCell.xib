@@ -40,6 +40,17 @@
                                     </label>
                                 </subviews>
                             </stackView>
+                            <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="agc-sb-001" userLabel="Save Button">
+                                <rect key="frame" x="138" y="24" width="30" height="30"/>
+                                <constraints>
+                                    <constraint firstAttribute="width" constant="30" id="agc-c-sb1"/>
+                                    <constraint firstAttribute="height" constant="30" id="agc-c-sb2"/>
+                                </constraints>
+                                <inset key="imageEdgeInsets" minX="0.0" minY="0.0" maxX="2.2250738585072014e-308" maxY="0.0"/>
+                                <connections>
+                                    <action selector="saveTapped" destination="agc-ce-001" eventType="touchUpInside" id="agc-a-sb1"/>
+                                </connections>
+                            </button>
                         </subviews>
                         <color key="backgroundColor" white="0.0" alpha="0.0" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                         <constraints>
@@ -47,6 +58,8 @@
                             <constraint firstItem="agc-ms-001" firstAttribute="leading" secondItem="agc-cd-001" secondAttribute="leading" constant="16" id="agc-c4-001"/>
                             <constraint firstAttribute="trailing" secondItem="agc-ms-001" secondAttribute="trailing" constant="16" id="agc-c5-001"/>
                             <constraint firstAttribute="bottom" secondItem="agc-ms-001" secondAttribute="bottom" constant="13" id="agc-c6-001"/>
+                            <constraint firstItem="agc-sb-001" firstAttribute="top" secondItem="agc-im-001" secondAttribute="top" constant="8" id="agc-c-sb3"/>
+                            <constraint firstItem="agc-sb-001" firstAttribute="trailing" secondItem="agc-im-001" secondAttribute="trailing" constant="-8" id="agc-c-sb4"/>
                         </constraints>
                     </view>
                 </subviews>
@@ -54,6 +67,7 @@
             <connections>
                 <outlet property="cardView" destination="agc-cd-001" id="agc-o1-001"/>
                 <outlet property="articleImageView" destination="agc-im-001" id="agc-o2-001"/>
+                <outlet property="saveButton" destination="agc-sb-001" id="agc-o-sb1"/>
                 <outlet property="titleLabel" destination="agc-tl-001" id="agc-o3-001"/>
                 <outlet property="titleMinimumHeight" destination="agc-c2-001" id="agc-o4-001"/>
             </connections>

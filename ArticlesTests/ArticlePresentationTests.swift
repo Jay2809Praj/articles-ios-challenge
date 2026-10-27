@@ -99,4 +99,192 @@ final class ArticlePresentationTests: XCTestCase {
         XCTAssertEqual(ArticleSearchFilter.filter(articles, matching: "   ").count, 3)
         XCTAssertTrue(ArticleSearchFilter.filter(articles, matching: "zzqx").isEmpty)
     }
+
+    // MARK: - Section Filter & Saved State
+
+    func testSectionFilterEnumValues() {
+        XCTAssertEqual(ArticleListSectionFilter.all.rawValue, 0)
+        XCTAssertEqual(ArticleListSectionFilter.saved.rawValue, 1)
+        XCTAssertEqual(ArticleListSectionFilter(rawValue: 0), .all)
+        XCTAssertEqual(ArticleListSectionFilter(rawValue: 1), .saved)
+    }
+
+    func testContentStateViewEmptySavedState() {
+        let state = ContentStateView(kind: .emptySaved)
+        XCTAssertEqual(state.kind, .emptySaved)
+    }
+
+    func testSearchFiltersSavedSubset() {
+        let savedArticles = [
+            Article.sample(title: "Saved Swift Guide", url: "https://example.com/swift"),
+            Article.sample(title: "Saved Kotlin Guide", url: "https://example.com/kotlin")
+        ]
+
+        let searchSwift = ArticleSearchFilter.filter(savedArticles, matching: "swift")
+        XCTAssertEqual(searchSwift.count, 1)
+        XCTAssertEqual(searchSwift.first?.title, "Saved Swift Guide")
+
+        let searchNone = ArticleSearchFilter.filter(savedArticles, matching: "flutter")
+        XCTAssertTrue(searchNone.isEmpty)
+    }
+
+    // MARK: - Storage size formatting
+
+    func testStorageSizeFormatterRendersMegabytes() {
+        XCTAssertEqual(StorageSizeFormatter.megabytes(0), "0 MB")
+        XCTAssertEqual(StorageSizeFormatter.megabytes(12_345), "<0.1 MB")
+        XCTAssertEqual(StorageSizeFormatter.megabytes(712_328), "0.7 MB")
+        XCTAssertEqual(StorageSizeFormatter.megabytes(13_002_342), "12.4 MB")
+        XCTAssertEqual(StorageSizeFormatter.megabytes(50 * 1024 * 1024), "50 MB")
+        XCTAssertEqual(StorageSizeFormatter.megabytes(-5), "0 MB")
+    }
+
+    func testStorageLimitOverrideFromLaunchArgument() {
+        let defaults = UserDefaults(suiteName: "StorageLimitOverrideTests")!
+        defaults.removePersistentDomain(forName: "StorageLimitOverrideTests")
+        defer { defaults.removePersistentDomain(forName: "StorageLimitOverrideTests") }
+
+        XCTAssertEqual(AppConstants.SavedArticles.storageLimitBytes(from: defaults), 50 * 1024 * 1024)
+
+        defaults.set(2, forKey: AppConstants.SavedArticles.storageLimitOverrideKey)
+        XCTAssertEqual(AppConstants.SavedArticles.storageLimitBytes(from: defaults), 2 * 1024 * 1024)
+
+        defaults.set(0, forKey: AppConstants.SavedArticles.storageLimitOverrideKey)
+        XCTAssertEqual(AppConstants.SavedArticles.storageLimitBytes(from: defaults), 50 * 1024 * 1024)
+    }
+
+    func testStorageSizeFormatterUsageSummary() {
+        XCTAssertEqual(
+            StorageSizeFormatter.usageSummary(used: 13_002_342, limit: 50 * 1024 * 1024),
+            "12.4 MB of 50 MB used"
+        )
+        XCTAssertEqual(StorageSizeFormatter.usageSummary(used: 0, limit: 50 * 1024 * 1024), "0 MB of 50 MB used")
+    }
+
+    func testStorageLimitBannerWording() {
+        let one = StatusBannerView.Content.storageLimit(SavedArticlesEviction(reason: .storageFull, titles: ["Old News"]))
+        XCTAssertEqual(one.message, "Storage full: ‘Old News’ removed to make room.")
+
+        let several = StatusBannerView.Content.storageLimit(
+            SavedArticlesEviction(reason: .storageFull, titles: ["Old News", "Older News", "Oldest"])
+        )
+        XCTAssertEqual(several.message, "Storage full: ‘Old News’ and 2 more removed to make room.")
+
+        let huge = StatusBannerView.Content.storageLimit(SavedArticlesEviction(reason: .articleTooLarge, titles: ["Giant"]))
+        XCTAssertEqual(huge.message, "‘Giant’ is too large to save (over the 50 MB limit).")
+    }
+
+    // MARK: - Widget Store
+
+    func testSharedArticleStoreSavesAndLoadsArticles() {
+        let store = SharedArticleStore.temporary()
+        defer { store.clear() }
+        let articles = [
+            WidgetArticleData(id: "a", title: "First", sourceName: "Source 1", dateString: "Today", webURL: "https://1.com", isSaved: true),
+            WidgetArticleData(id: "b", title: "Second", sourceName: "Source 2", dateString: "Yesterday", webURL: "https://2.com")
+        ]
+
+        XCTAssertTrue(store.isAvailable)
+        XCTAssertTrue(store.loadArticles().isEmpty)
+
+        store.saveArticles(articles)
+
+        XCTAssertEqual(store.loadArticles(), articles)
+        XCTAssertEqual(store.currentArticle()?.article.id, "a")
+        XCTAssertEqual(store.currentArticle()?.total, 2)
+    }
+
+    func testSharedArticleStoreWithoutContainerIsInert() {
+        let store = SharedArticleStore(containerURL: nil)
+
+        XCTAssertFalse(store.isAvailable)
+        store.saveArticles([WidgetArticleData(id: "a", title: "A")])
+        store.saveImageData(Data([1, 2, 3]), for: "a")
+
+        XCTAssertTrue(store.loadArticles().isEmpty)
+        XCTAssertNil(store.currentArticle())
+        XCTAssertNil(store.loadImageData(for: "a"))
+    }
+
+    func testSharedArticleStoreCyclesAndWrapsAround() {
+        let store = SharedArticleStore.temporary()
+        defer { store.clear() }
+        store.saveArticles(["a", "b", "c"].map { WidgetArticleData(id: $0, title: $0) })
+
+        XCTAssertEqual(store.currentIndex(), 0)
+        store.cycleToNextArticle()
+        XCTAssertEqual(store.currentIndex(), 1)
+        store.cycleToPreviousArticle()
+        XCTAssertEqual(store.currentIndex(), 0)
+        store.cycleToPreviousArticle()
+        XCTAssertEqual(store.currentIndex(), 2, "Previous from the first article wraps to the last")
+        store.cycleToNextArticle()
+        XCTAssertEqual(store.currentIndex(), 0, "Next from the last article wraps to the first")
+    }
+
+    func testSharedArticleStoreResetsIndexWhenListShrinks() {
+        let store = SharedArticleStore.temporary()
+        defer { store.clear() }
+        store.saveArticles(["a", "b", "c"].map { WidgetArticleData(id: $0, title: $0) })
+        store.cycleToNextArticle()
+        store.cycleToNextArticle()
+        XCTAssertEqual(store.currentIndex(), 2)
+
+        store.saveArticles([WidgetArticleData(id: "a", title: "a")])
+
+        XCTAssertEqual(store.currentArticle()?.index, 0)
+        XCTAssertEqual(store.currentArticle()?.article.id, "a")
+    }
+
+    func testSharedArticleStoreStoresImagesPerArticleAndPrunesUnlistedOnes() {
+        let store = SharedArticleStore.temporary()
+        defer { store.clear() }
+        store.saveArticles(["a", "b"].map { WidgetArticleData(id: $0, title: $0) })
+        let imageA = Data("image-a".utf8)
+        let imageB = Data("image-b".utf8)
+
+        store.saveImageData(imageA, for: "a")
+        store.saveImageData(imageB, for: "b")
+        XCTAssertTrue(store.hasImage(for: "a"))
+        XCTAssertEqual(store.loadImageData(for: "a"), imageA)
+        XCTAssertEqual(store.loadImageData(for: "b"), imageB)
+
+        // Article "b" drops out of the list, so its image goes with it.
+        store.saveArticles([WidgetArticleData(id: "a", title: "a")])
+
+        XCTAssertEqual(store.loadImageData(for: "a"), imageA)
+        XCTAssertFalse(store.hasImage(for: "b"))
+        XCTAssertNil(store.loadImageData(for: "b"))
+    }
+
+    func testSharedArticleStoreClearRemovesEverything() {
+        let store = SharedArticleStore.temporary()
+        store.saveArticles([WidgetArticleData(id: "a", title: "a")])
+        store.saveImageData(Data([1]), for: "a")
+        store.cycleToNextArticle()
+
+        store.clear()
+
+        XCTAssertTrue(store.loadArticles().isEmpty)
+        XCTAssertNil(store.loadImageData(for: "a"))
+        XCTAssertEqual(store.currentIndex(), 0)
+    }
+
+    // MARK: - Deep Linking
+
+    func testWidgetDeepLinkCarriesTheArticleIdentifier() {
+        let identifier = "https://example.com/article?id=123&x=1|2025-03-07T11:00:59Z|Title"
+        var components = URLComponents()
+        components.scheme = "articles"
+        components.host = "open"
+        components.queryItems = [URLQueryItem(name: "id", value: identifier)]
+
+        let deepLink = components.url
+        XCTAssertNotNil(deepLink)
+        XCTAssertEqual(deepLink?.scheme, "articles")
+        XCTAssertEqual(deepLink?.host, "open")
+
+        let parsed = URLComponents(url: deepLink!, resolvingAgainstBaseURL: false)
+        XCTAssertEqual(parsed?.queryItems?.first(where: { $0.name == "id" })?.value, identifier)
+    }
 }

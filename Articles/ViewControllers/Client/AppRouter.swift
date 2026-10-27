@@ -59,6 +59,31 @@ final class AppRouter: NSObject, ArticleRouting {
         }
     }
 
+    /// Opens an article from outside the app, such as a widget tap. Whatever
+    /// is on screen gives way: Safari is closed and an open detail is
+    /// replaced, so repeated taps never stack detail screens.
+    func showArticleDetail(for article: Article) {
+        let show = { [weak self] in
+            guard let self else { return }
+            if self.visibleDetail?.articleIdentifier == article.identifier { return }
+            if self.splitViewController.isCollapsed {
+                self.primaryNavigation.popToRootViewController(animated: false)
+            }
+            self.showDetail(for: article, sourceViewProvider: { nil })
+        }
+        if splitViewController.presentedViewController != nil {
+            splitViewController.dismiss(animated: false, completion: show)
+        } else {
+            show()
+        }
+    }
+
+    /// The detail screen the user is looking at, in either column.
+    private var visibleDetail: ArticleDetailViewController? {
+        let navigation = splitViewController.isCollapsed ? primaryNavigation : secondaryNavigation
+        return navigation.topViewController as? ArticleDetailViewController
+    }
+
     func closeDetail() {
         if primaryNavigation.viewControllers.count > 1 {
             primaryNavigation.popViewController(animated: true)

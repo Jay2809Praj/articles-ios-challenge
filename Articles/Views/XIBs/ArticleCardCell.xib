@@ -79,6 +79,17 @@
                                     </stackView>
                                 </subviews>
                             </stackView>
+                            <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="acc-sb-001" userLabel="Save Button">
+                                <rect key="frame" x="313" y="26" width="38" height="38"/>
+                                <constraints>
+                                    <constraint firstAttribute="width" constant="38" id="acc-c-sb1"/>
+                                    <constraint firstAttribute="height" constant="38" id="acc-c-sb2"/>
+                                </constraints>
+                                <inset key="imageEdgeInsets" minX="0.0" minY="0.0" maxX="2.2250738585072014e-308" maxY="0.0"/>
+                                <connections>
+                                    <action selector="saveTapped" destination="acc-ce-001" eventType="touchUpInside" id="acc-a-sb1"/>
+                                </connections>
+                            </button>
                         </subviews>
                         <color key="backgroundColor" white="0.0" alpha="0.0" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                         <constraints>
@@ -86,6 +97,8 @@
                             <constraint firstItem="acc-ms-001" firstAttribute="leading" secondItem="acc-cd-001" secondAttribute="leading" constant="16" id="acc-c8-001"/>
                             <constraint firstAttribute="trailing" secondItem="acc-ms-001" secondAttribute="trailing" constant="16" id="acc-c9-001"/>
                             <constraint firstAttribute="bottom" secondItem="acc-ms-001" secondAttribute="bottom" constant="16" id="acc-ca-001"/>
+                            <constraint firstItem="acc-sb-001" firstAttribute="top" secondItem="acc-im-001" secondAttribute="top" constant="10" id="acc-c-sb3"/>
+                            <constraint firstItem="acc-sb-001" firstAttribute="trailing" secondItem="acc-im-001" secondAttribute="trailing" constant="-10" id="acc-c-sb4"/>
                         </constraints>
                     </view>
                 </subviews>
@@ -99,6 +112,7 @@
                 <outlet property="footerStack" destination="acc-fs-001" id="acc-o6-001"/>
                 <outlet property="articleImageView" destination="acc-im-001" id="acc-o7-001"/>
                 <outlet property="readMoreButton" destination="acc-rb-001" id="acc-o8-001"/>
+                <outlet property="saveButton" destination="acc-sb-001" id="acc-o-sb1"/>
                 <outlet property="spacerView" destination="acc-sp-001" id="acc-o9-001"/>
                 <outlet property="titleLabel" destination="acc-tl-001" id="acc-oa-001"/>
             </connections>

@@ -57,6 +57,11 @@ private extension AppDelegate {
             ArticlesCache(logger: resolver.resolve(XCGLogger.self)!)
         }
         .inObjectScope(.container)
+
+        container.register(SharedArticleStore.self) { _ in
+            SharedArticleStore.shared
+        }
+        .inObjectScope(.container)
     }
 
     /// Implementations of the protocols in `Models/ProviderProtocols`.
@@ -76,10 +81,19 @@ private extension AppDelegate {
 
     /// The only layer view controllers are allowed to talk to.
     static func registerManagers(in container: Container) {
+        container.register(WidgetSyncManagerProtocol.self) { resolver in
+            WidgetSyncManager(
+                store: resolver.resolve(SharedArticleStore.self)!,
+                logger: resolver.resolve(XCGLogger.self)!
+            )
+        }
+        .inObjectScope(.container)
+
         container.register(ArticlesManagerProtocol.self) { resolver in
             ArticlesManager(
                 provider: resolver.resolve(ArticlesProviderProtocol.self)!,
                 cache: resolver.resolve(ArticlesCacheProtocol.self)!,
+                widgetSync: resolver.resolve(WidgetSyncManagerProtocol.self),
                 logger: resolver.resolve(XCGLogger.self)!
             )
         }
@@ -90,8 +104,11 @@ private extension AppDelegate {
         }
         .inObjectScope(.container)
 
-        container.register(FavoritesManagerProtocol.self) { _ in
-            FavoritesManager()
+        container.register(FavoritesManagerProtocol.self) { resolver in
+            FavoritesManager(
+                storageLimitBytes: AppConstants.SavedArticles.storageLimitBytes(),
+                widgetSync: resolver.resolve(WidgetSyncManagerProtocol.self)
+            )
         }
         .inObjectScope(.container)
     }

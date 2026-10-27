@@ -21,10 +21,18 @@ final class ArticleDetailViewController: UIViewController {
     private let article: Article
     private let display: ArticleDisplay
     private let favoritesManager: FavoritesManagerProtocol
+    private let widgetSync: WidgetSyncManagerProtocol?
     private weak var router: ArticleRouting?
+    /// The favourite state the button shows, so it only bounces on a change.
+    private var shownFavoriteState: Bool?
     private lazy var bannerPresenter = BannerPresenter(hostView: view, above: readFullArticleButton)
+    private var savedObserver: NSObjectProtocol?
+    private var evictionObserver: NSObjectProtocol?
 
     override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
+
+    /// `Article.identifier` of the article on screen.
+    var articleIdentifier: String { article.identifier }
 
     /// Where the hero image sits, in the view's coordinates – the zoom
     /// transition lands the card's image exactly here.
@@ -40,11 +48,13 @@ final class ArticleDetailViewController: UIViewController {
         coder: NSCoder,
         article: Article,
         favoritesManager: FavoritesManagerProtocol,
+        widgetSync: WidgetSyncManagerProtocol? = nil,
         router: ArticleRouting
     ) {
         self.article = article
         self.display = ArticleDisplay(article: article)
         self.favoritesManager = favoritesManager
+        self.widgetSync = widgetSync
         self.router = router
         super.init(coder: coder)
     }
@@ -54,15 +64,48 @@ final class ArticleDetailViewController: UIViewController {
         fatalError("Use ViewControllerFactory to create ArticleDetailViewController")
     }
 
+    deinit {
+        if let savedObserver {
+            NotificationCenter.default.removeObserver(savedObserver)
+        }
+        if let evictionObserver {
+            NotificationCenter.default.removeObserver(evictionObserver)
+        }
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         configureAppearance()
         renderText()
         renderFavoriteState(animated: false)
-        articleImageView.setImage(with: display.imageURL)
+        observeSavedArticles()
+        articleImageView.setImage(with: display.imageURL, localFile: favoritesManager.savedImageURL(for: article))
+        widgetSync?.updateLastOpenedArticle(article)
 
         registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: Self, _) in
             self.renderText()
+        }
+    }
+
+    private func observeSavedArticles() {
+        savedObserver = NotificationCenter.default.addObserver(
+            forName: AppConstants.SavedArticles.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.renderFavoriteState(animated: true)
+        }
+        evictionObserver = NotificationCenter.default.addObserver(
+            forName: AppConstants.SavedArticles.didEvictNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            // Only the screen in front reports it; the list does so otherwise.
+            guard let self, self.view.window != nil, self.presentedViewController == nil,
+                  self.navigationController?.topViewController === self,
+                  let eviction = notification.userInfo?[AppConstants.SavedArticles.evictionUserInfoKey] as? SavedArticlesEviction
+            else { return }
+            self.bannerPresenter.toast(.storageLimit(eviction))
         }
     }
 
@@ -164,10 +207,13 @@ final class ArticleDetailViewController: UIViewController {
 
     private func renderFavoriteState(animated: Bool) {
         let isFavorite = favoritesManager.isFavorite(article)
+        // The tap and the change notification that follows it both land here.
+        let changed = shownFavoriteState != nil && shownFavoriteState != isFavorite
+        shownFavoriteState = isFavorite
         favoriteButton.setImage(isFavorite ? AppIcon.favoriteRemove : AppIcon.favoriteAdd, for: .normal)
         favoriteButton.accessibilityLabel = isFavorite ? "Remove from favourites" : "Add to favourites"
 
-        guard animated else { return }
+        guard animated, changed else { return }
         favoriteButton.transform = CGAffineTransform(scaleX: 0.7, y: 0.7)
         UIView.animate(
             withDuration: 0.45,

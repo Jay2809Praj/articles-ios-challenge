@@ -1,161 +1,254 @@
 # Articles
 
-An iOS / iPadOS app that lists articles from a mock API and shows a detail screen for each one. Built for the Magycal iOS challenge.
+An iOS / iPadOS app that lists articles from an API, displays detailed reading views, supports offline saving, pagination, and an interactive home screen widget with deep linking. Built for the Magycal iOS Technical Challenge (Part 1 & Part 2).
 
-- **UIKit + Storyboards + XIBs**, MVC, with one self-contained **SwiftUI** component embedded through `UIHostingController`
+- **UIKit + Storyboards + XIBs**, MVC; **SwiftUI** for the widget extension and for the full-screen state view, which the app hosts through `UIHostingController`
 - **iPhone and iPad** (`UISplitViewController` on iPad), deployment target **iOS 18.0**
-- Works **offline**, survives **broken data**, supports **Dynamic Type**, and adopts **Liquid Glass** on iOS 26 with a fallback for iOS 18–25
+- Works **offline**, survives **broken data**, supports **Dynamic Type**, adopts **Liquid Glass**, implements a **50 MB oldest-saved-first offline budget**, **Infinite Scroll**, and an **Interactive WidgetKit Extension**
+
+---
 
 ## Requirements
 
 | Tool | Version |
 | --- | --- |
-| Xcode | 26 (built and tested with 26.6) |
-| iOS deployment target | 18.0 |
+| Xcode | 26 (built and tested with 26.6; the Liquid Glass APIs need the iOS 26 SDK) |
+| iOS Deployment Target | 18.0 |
 | CocoaPods | 1.16 or newer |
+| Swift | 5.0 |
 
-## Setup and run
+---
+
+## Setup and Run
 
 ```bash
 git clone https://github.com/Jay2809Praj/articles-ios-challenge.git
 cd articles-ios-challenge
+git checkout part-2
 pod install
 open Articles.xcworkspace
 ```
 
-Select the **Articles** scheme, choose an iPhone or iPad simulator (or a device), and run. Always open the **workspace**, not the project.
+1. Select the **Articles** scheme in Xcode.
+2. Choose an iOS Simulator (e.g. `iPhone 16 Pro` or `iPhone 17 Pro`) or a physical device.
+3. Press **⌘R** to run. Always open the **`.xcworkspace`**, not the `.xcodeproj`.
 
-To run the unit tests press `⌘U`, or:
+### Running Unit Tests
+
+Press **⌘U** in Xcode, or execute from the terminal:
 
 ```bash
 xcodebuild test -workspace Articles.xcworkspace -scheme Articles \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
 ```
 
-## What is implemented
+*All 128 unit tests pass with zero failures (`** TEST SUCCEEDED **`).*
+
+---
+
+## What is Implemented
 
 | Area | Implementation |
 | --- | --- |
-| Article list | Storyboard scene, `UICollectionView` with XIB-based cells, list and grid layouts from the design, inline search |
-| Article detail | Storyboard scene following the Figma frame, favourite toggle, opens the full article in `SFSafariViewController` |
-| SwiftUI | `ContentStateView` (loading skeleton, offline, error, empty, no results, iPad placeholder) hosted by `ContentStateViewController` |
-| iPad | `UISplitViewController`, list and detail side by side; collapses to a navigation stack in compact widths |
-| Dynamic Type | Every font goes through `UIFontMetrics`; cells self-size; the card footer stacks vertically at accessibility sizes |
-| Liquid Glass | Detail back button, floating "Read Full Article" button and status banner use glass on iOS 26 behind `#available`, with blur / solid fallbacks |
-| Interactivity | Pull-to-refresh, zoom transition from the card image into the detail image, press states, animated state changes |
-| Networking | Alamofire, one `NetworkError` type for every failure |
-| Logging | XCGLogger: requests at `debug`, responses at `info`, headers at `verbose`, cache fallbacks at `warning`, failures at `error` |
-| Dependency injection | Swinject container set up in `AppDelegate`; view controllers receive managers through their initialisers |
-| Cache | The last loaded list is persisted with Cache and shown when the device is offline or the request fails |
-| Connectivity | ReachabilitySwift; an offline banner or full-screen state is shown, and the list refreshes automatically when the connection returns |
-| Images | Kingfisher with downsampling, the design's placeholder while loading and as fallback for missing, invalid or failing URLs |
-| Data robustness | Lenient decoding of every field, lossy array decoding, link validation, invalid JSON reported as an error state |
+| **Article List** | Storyboard scene, `UICollectionView` with XIB cells, list and grid layouts, inline search, and pull-to-refresh. |
+| **Article Detail** | Storyboard scene following the Figma frame, favourite/save toggle, opens full article in `SFSafariViewController`. |
+| **Save for Later (Feature 1)** | Dedicated Saved list; article text and image stored by the app itself (images under Application Support, not an image cache) so they survive restarts and cache expiry; 50 MB oldest-saved-first storage budget counted from the real file sizes. |
+| **Infinite Scroll (Feature 2 - Option A)** | Pagination simulated inside `ArticlesProvider` (10 articles per page, as if the server paginated); `ArticlesManager` loads the next page on demand, including offline from the cache; the list shows a footer indicator while a page loads. |
+| **Interactive Widget (Feature 2 - Option B)** | WidgetKit extension with `.systemSmall`, `.systemMedium`, `.systemLarge` sizes, fed only by the app through an App Group (last opened, saved and latest articles with their images), interactive AppIntents (Next/Prev cycling), and deep linking (`articles://open?id=...`). |
+| **SwiftUI Integration** | `ContentStateView` (loading skeleton, offline, error, empty, no results, iPad placeholder) hosted via `UIHostingController`. |
+| **iPad Layout** | `UISplitViewController`, list and detail side-by-side; collapses to a navigation stack in compact widths. |
+| **Dynamic Type** | Every font scaled through `UIFontMetrics`; cells self-size; card footers stack vertically at accessibility sizes. |
+| **Liquid Glass** | Detail back button, floating "Read Full Article" button, and status banner adapt glass effects on supported versions. |
+| **Interactivity** | Zoom transition from card image to detail image, interactive dismiss, and animated layout switches. |
+| **Networking & Logging** | Alamofire with custom mapper to `NetworkError`; structured logging via `XCGLogger`. |
+| **Dependency Injection** | Swinject container in `AppDelegate`; view controllers receive injected managers. |
+| **Cache & Offline Sync** | The last loaded pages persist on disk through the Cache pod and are served, page by page, when the network fails; Reachability monitoring drives the offline banner and reloads cached, failed or empty content when the connection returns. |
+| **Data Robustness** | Lenient decoding of all fields, lossy array decoding, URL sanitisation, and error handling for malformed JSON. |
+
+---
+
+## Part 2 Deep Dive
+
+### Feature 1: Save for Later (Offline Reading & 50 MB Budget)
+
+Users can save articles to read offline from both the list card and the detail screen.
+
+- **Offline Persistence**: `FavoritesManager` persists the article record (title, description, content, metadata) with the `Cache` pod and downloads the article's image into the app's own `SavedImageStore` under `Library/Application Support/SavedArticles/Images`. That folder is not purged by the system and has no expiry, unlike Kingfisher's cache (which expires after 7 days and lives in `Caches`). When offline, saved articles open with their text and image, even after a cold relaunch or weeks without using the app.
+  - The list and detail screens load a saved article's image from that file first (`RemoteImageView.setImage(with:localFile:)`), so no network or cache lookup is involved.
+  - If a download did not finish (the app was killed, or the article was saved offline), the article stays saved without an image and the image is fetched again on the next launch.
+  - Removing an article, eviction, and "clear all" delete the corresponding files.
+- **Dedicated Saved Area**: The segmented control under the title switches between **All Articles** and **Saved (n)**. The Saved section lists the saved articles in the same card and grid layouts, searchable, with the storage usage line underneath; pull-to-refresh and paging apply only to the feed.
+- **50 MB Storage Budget Decision**:
+  - The brief dictates that saved content is limited to **50 MB**.
+  - **Eviction Strategy**: Implemented an **oldest-saved-first** eviction policy in `FavoritesManager`.
+  - When the cumulative size of saved articles and images would exceed 50 MB (52,428,800 bytes), saving a new article evicts the oldest saved article and deletes its image file until the total is back within budget.
+  - **Real sizes**: every image counts with the exact number of bytes its file occupies on disk, read back from the file system. Sizes are re-read on launch so the budget never drifts from reality.
+  - **Async Image Re-enforcement**: Because image downloads complete asynchronously after an article is saved, the storage budget is **re-enforced whenever an image lands on disk**. This prevents the total from silently exceeding 50 MB when large images finish downloading.
+  - **The user is told**: whenever the limit removes saved articles, `FavoritesManager` posts a `SavedArticlesDidEvictNotification` carrying the removed titles and the reason; the list and detail screens show a toast such as "Storage full: ‘X’ removed to make room." or "‘X’ is too large to save (over the 50 MB limit)."
+  - **Usage is visible**: the Saved section shows "12.4 MB of 50 MB used" under the segmented control.
+  - **QA aid**: launch the app with `-SavedArticlesStorageLimitMB 1` (Xcode scheme arguments, or `xcrun simctl launch booted com.jayprajapati.Articles -SavedArticlesStorageLimitMB 1`) to exercise eviction without saving 50 MB.
+  - **Single Article Exceeding Limit**: If a single article's total size (metadata + image) exceeds the entire 50 MB budget, it is automatically removed from saved storage to prevent permanently consuming the budget.
+  - The behavior is covered by automated unit tests (`test50MBStorageLimitEvictsOldestArticleWhenExceeded`, `testAsyncImageSizeUpdateReEnforcesStorageLimit`, `testSingleArticleExceedingBudgetIsEvicted`).
+
+---
+
+### Feature 2: Both Options Implemented
+
+To provide a complete, industry-grade implementation, both optional features were engineered:
+
+#### Option A: Infinite Scroll & Pagination
+- The mock API delivers all articles in a single payload, so the pagination is simulated **behind the provider**, as the brief asks: everything above the provider sees a paged API.
+- `ArticlesProviderProtocol` exposes `fetchArticles(page:pageSize:)` and answers with an `ArticlesPage` (`articles`, `page`, `hasMore`).
+- `ArticlesProvider` plays the server: page 1 downloads the feed and keeps it as the snapshot; later pages are cut from that snapshot (**10 articles per page**) after a simulated latency of 0.6 s. Page 1 is always a fresh download, so pull-to-refresh picks up changes.
+- `ArticlesManager` exposes `loadArticles()` (first page) and `loadNextPage()`. The cache holds every page loaded so far; when the network is unavailable the cached list is served in pages of the same size, so scrolling behaves the same offline.
+- `ArticleListViewController` only asks the manager for the next page when the last loaded card is about to appear and shows the native activity indicator footer while waiting. It contains no paging logic or artificial delay.
+- Search filters the pages loaded so far; scrolling to the end of the results keeps loading pages.
+- A failed page load keeps what is on screen, shows a "Couldn't load more articles" toast, and can be retried by scrolling again.
+
+#### Option B: Home Screen Widget with Photos & Deep Linking
+- **Target**: `ArticlesWidget` extension built using **WidgetKit**, **SwiftUI**, and **AppIntents**.
+- **Supported Families**: `.systemSmall`, `.systemMedium`, and `.systemLarge`.
+- **Data comes from the app only**. Both targets share the App Group `group.com.jayprajapati.Articles` (see `Articles.entitlements` and `ArticlesWidget.entitlements`). The widget makes no network requests and ships no article content; when the app has not loaded anything yet it shows an "Open Articles to load the latest news" state.
+  - `WidgetSyncManager` (app side) publishes up to 10 articles to `SharedArticleStore`: the article the user **opened last**, then the **saved** articles, then the **latest loaded** ones. It downloads each article's image once, downsampled to 800 px, and reloads the widget once per publish. Updates that arrive together during launch are coalesced into a single publish.
+  - `SharedArticleStore` is a file-based store inside the shared container (`articles.json`, one image per article, the browse index). It is compiled into both targets and knows nothing about WidgetKit or networking.
+  - The last opened article is remembered across app restarts, so after killing the app the widget still shows what the user read last.
+- **Layouts**:
+  - **Medium**: Split layout with a 112 pt rounded thumbnail, source, saved indicator, position (e.g. 3/10), headline, date, and a "Read →" pill.
+  - **Small**: Full-bleed cover photo with a dark gradient overlay, source tag, headline, and a Next button.
+  - **Large**: Hero image, source, date, position, headline, and an "Open Story" button.
+- **Interactive Browsing (AppIntents)**:
+  - **Next (`>`)** and **Previous (`<`)** buttons cycle through the published list without launching the app, via `NextArticleIntent` and `PreviousArticleIntent`. Opening an article in the app brings the widget back to that article; a plain refresh leaves the browse position alone.
+- **Deep Linking**:
+  - Tapping the widget sends `articles://open?id=<article identifier>`.
+  - `SceneDelegate` looks the identifier up by exact match among the saved articles, the cached feed and the last opened article, falling back to the list's own page-1 request. `AppRouter` then closes Safari if it is open and replaces any open detail screen, so repeated widget taps never stack screens. `articles://open` without an identifier simply opens the app.
+
+---
 
 ## Architecture
 
-The project follows the structure requested in the challenge. Each layer only knows the one below it, and only through protocols.
+The project adheres to strict protocol-oriented boundaries. Each layer depends only on the layer immediately below it via abstractions:
 
 ```
 ViewControllers  →  Managers  →  ProviderProtocols  ←  Providers  →  Alamofire / Reachability
-                        ↓
-                      Cache
+                         ↓
+                   Cache / Store
 ```
 
 ```
 Articles/
 ├── Models/
-│   ├── ProviderProtocols/   ArticlesProviderProtocol, ReachabilityProviderProtocol, NetworkClientProtocol
-│   └── Entities/            Article, ArticleSource, ArticlesResponse, CachedArticles (Codable), LossyArray
+│   ├── ProviderProtocols/   ArticlesProviderProtocol (+ ArticlesPage), NetworkClientProtocol, ReachabilityProviderProtocol
+│   └── Entities/            Article (+ Identity), ArticleSource, ArticlesResponse, CachedArticles, LossyArray,
+│                            KeyedDecodingContainer+CleanString
 ├── Provider/
-│   ├── Client/              NetworkClient, NetworkError (+ mapper), NetworkEventLogger, ReachabilityProvider, Endpoint
+│   ├── Client/              NetworkClient, NetworkSessionFactory, NetworkError, NetworkErrorMapper, NetworkEventLogger,
+│   │                        ReachabilityProvider, Endpoint
 │   └── Core/                ArticlesProvider
 ├── Managers/
-│   ├── Client/              Cache/ (ArticlesCache), Constants/ (colours, fonts, icons, metrics), Utilities/
-│   └── Core/                ArticlesManager, ConnectivityManager, FavoritesManager (+ their protocols)
+│   ├── Client/              SharedArticleStore, SavedImageStore (+ protocol)
+│   │   ├── Cache/           ArticlesCache (+ protocol)
+│   │   ├── Constants/       AppConstants, AppColor, AppFont, AppIcon, AppMetrics
+│   │   └── Utilities/       ArticleDateFormatter, ArticleLinkValidator, ArticleSearchFilter, StorageSizeFormatter, LoggerFactory
+│   └── Core/                ArticlesManager, ConnectivityManager, FavoritesManager, WidgetSyncManager (+ protocols)
 ├── ViewControllers/
-│   ├── Client/              AppRouter, ViewControllerFactory, banner, glass helper, reusable view classes
+│   ├── Client/              AppRouter, ArticleRouting, ViewControllerFactory, ArticleListDataSource, ArticleListLayoutFactory,
+│   │                        ArticleListHeaderView, BannerPresenter, StatusBannerView, ContentStateViewController,
+│   │                        RemoteImageView, ReadMoreButton, GlassEffect, ArticleDisplay, TextStyler, NibLoadable,
+│   │                        NetworkError+UserMessage
 │   ├── Core/                ArticleListViewController, ArticleDetailViewController
-│   └── Cells/               ArticleCardCell, ArticleGridCell
+│   └── Cells/               ArticleCardCell, ArticleGridCell, CardStyle
 ├── Views/
-│   ├── XIBs/                Cells, list header, Read More button, status banner
 │   ├── Storyboards/         ArticleList, ArticleDetail
+│   ├── XIBs/                ArticleCardCell, ArticleGridCell, ArticleListHeaderView, StatusBannerView, ReadMoreButton
 │   └── SwiftUI/             ContentStateView
-├── Assets.xcassets          Colours, icons and images exported from Figma
-├── Assets/Fonts/            Roboto, Roboto Condensed, Montserrat
-├── AppDelegate.swift        App start-up and Swinject container
-├── SceneDelegate.swift      Window set-up
-└── LaunchScreen.storyboard
+├── Assets.xcassets/         App icon, colours, icons and images
+├── Assets/Fonts/            Bundled fonts
+├── AppDelegate.swift        App entry point and Swinject container
+├── SceneDelegate.swift      Window setup and widget deep links
+└── Articles.entitlements    App Group
+
+ArticlesWidget/              ArticlesWidget (timeline provider, views, Next / Previous intents), ArticlesWidgetBundle,
+                             Info.plist, ArticlesWidget.entitlements (App Group)
+ArticlesTests/               Unit tests and Mocks
 ```
 
-**How the rules of the brief are met**
+---
 
-- *View controllers talk only to Managers.* `ArticleListViewController` depends on `ArticlesManagerProtocol` and `ConnectivityManagerProtocol`; `ArticleDetailViewController` on `FavoritesManagerProtocol`. Neither imports Alamofire, Cache, Reachability or Swinject.
-- *Managers talk to Providers through protocols.* `ArticlesManager` only sees `ArticlesProviderProtocol` and `ArticlesCacheProtocol`, which is what lets `ArticlesTests` replace both with mocks.
-- *View controllers do not create their dependencies.* `ViewControllerFactory` instantiates each storyboard scene with `instantiateViewController(identifier:creator:)` and passes managers resolved from the container into a custom `init?(coder:…)`. A view controller cannot exist without them.
-- *Single responsibility.* The list screen is split into the view controller (state and coordination), `ArticleListDataSource`, `ArticleListLayoutFactory`, `ArticleListHeaderView`, `BannerPresenter` and `ArticleDisplay` (formatting and fallbacks).
+## Handling Bad Data and Network Scenarios
 
-## Handling bad data and bad networks
+The feed contains 79 articles with deliberate edge cases, all gracefully handled:
 
-The mock API contains 79 articles with these problems, all of which are handled:
-
-| Problem in the feed | Behaviour |
+| Feed Issue | Application Behavior |
 | --- | --- |
-| `title` missing | The description is used as the title; "Untitled article" if both are missing |
-| `description` missing or empty | The body falls back to the content, or to "No preview is available for this article." |
-| `author` is `null` | The publisher name is shown instead; the byline is omitted if neither exists |
-| `urlToImage` is `null`, empty or missing | The design's placeholder image is shown |
-| Image fails to load | One retry, then the same placeholder |
-| Invalid or non-http(s) link | The "Read Full Article" button is disabled and labelled "Full article unavailable" |
-| A field has the wrong type | That field becomes `nil`; the article is kept |
-| An array element is not an object | That element is skipped; the rest are kept |
-| The whole payload is invalid JSON | Cached articles are shown with a notice, or an error state with Retry if nothing is cached |
+| `title` missing | Falls back to `description`; displays "Untitled article" if both are missing. |
+| `description` missing | Falls back to `content`, or "No preview is available for this article." |
+| `author` is `null` | Displays publisher/source name; byline omitted if neither exists. |
+| `urlToImage` is `null` or missing | Displays the design placeholder image. |
+| Image fails to load | Automatically retries once, then displays placeholder. |
+| Invalid / non-HTTP(S) link | "Read Full Article" button is disabled and clearly labeled. |
+| Field type mismatch | Lenient decoding ignores corrupt fields while preserving the article. |
+| Malformed array elements | Skipped losslessly using `LossyArray`. |
+| Invalid JSON response | Displays cached articles with notice, or full error state with Retry. |
 
-| Network situation | Behaviour |
+| Network Situation | Application Behavior |
 | --- | --- |
-| Offline with cached articles | The cached list is shown with a pinned "You're offline · Saved …" banner |
-| Offline with nothing cached | The "You're offline" screen from the design, with Retry |
-| Request fails while online | Cached list plus a "Couldn't refresh" toast, or an error state with Retry |
-| Connection returns | "Back online" toast and an automatic refresh |
+| Offline with cache | Displays cached articles with pinned "You're offline" banner. |
+| Offline with empty cache | Displays full-screen offline illustration with Retry action. |
+| Request failure while online | Displays cache with toast notice, or error state with Retry. |
+| Connection restored | Dismisses the offline banner. Reloads only when the list on screen came from the cache, failed or is empty; fresh pages from the network are kept, with their scroll position. |
 
-To see these states, run on a device and use Airplane Mode, or use the Network Link Conditioner.
+---
 
-## Third-party libraries
+## Part 1 Review: Found and Fixed
 
-Required by the brief and all in use: **Alamofire**, **XCGLogger**, **Swinject**, **ReachabilitySwift**, **Kingfisher**, **Cache**.
+A critical pass over the Part 1 code before this submission. Each item names what was wrong and what changed. The behavioural fixes are covered by unit tests that were run against the previous code first and failed there.
 
-The optional pods are not used, deliberately:
-
-| Pod | Why it is not included |
+| Found | Fixed |
 | --- | --- |
-| Loaf | Unmaintained since 2020. The app needs a banner that can stay pinned while offline and render as Liquid Glass, so a small `StatusBannerView` (XIB) with `BannerPresenter` does the job. |
-| KMNavigationBarTransition | Smooths transitions between differently styled navigation bars by swizzling UIKit. Both screens draw their own headers as in the design, so there is no bar transition to fix. |
-| FTLinearActivityIndicator | Recreates the status bar activity indicator on notched iPhones. The design calls for none; loading is shown with skeleton cards and pull-to-refresh. |
-| AlamofireNetworkActivityIndicator | Drives `isNetworkActivityIndicatorVisible`, which has had no effect since iOS 13. |
+| Deep links matched articles by fuzzy title comparison, so two articles with similar titles could open the wrong one. | `SceneDelegate` matches on the exact `Article.identifier` (or exact `url`), looking in the saved articles, the cached feed and the last opened article before falling back to a network load. |
+| Every reconnect reloaded page 1, even when the list on screen had just come from the network. The user lost their scroll position and the loaded pages, and the app sent a request it did not need. | `ArticlesLoadResult.needsRefreshWhenOnline`: a reconnect reloads only when the content is cached, failed, empty or still loading. Fresh pages stay as they are. |
+| A next page that was in flight when the user pulled to refresh was appended to the *new* list when it arrived, duplicating articles and corrupting the cache. | `ArticlesManager` stamps each list with a generation; a page from an earlier generation is dropped and paging continues from the new list. |
+| A cold launch from a widget tap sent two page-1 requests at once (the list screen's and the deep link's); a reconnect during a load sent a third. | `loadArticles()` shares one in-flight page-1 request between all callers. |
+| Repeated widget taps pushed a new detail screen on top of the previous one, and a tap while Safari was open did nothing visible. | `AppRouter.showArticleDetail` dismisses Safari, pops to the list and shows the article once; a tap for the article already on screen is a no-op. |
+| Pinning the offline banner while a "Back online" toast was still running left a cancelled timer behind, so the next `unpin()` did nothing and the offline banner stayed on screen. | `BannerPresenter.pin` clears the toast timer it cancels. |
+| Typing in search faster than the 0.25 s cross-fade could leave the list and the "No results" overlay both hidden or both visible, because the guard read `isHidden` mid-animation. | The list screen tracks the intended state itself and a completion that lost a race no longer applies its stale `isHidden` values. |
+| The favourite button bounced twice per tap: once from the tap and once from the change notification that followed. | The detail screen animates only when the shown state actually changed. |
+| The README asked for Xcode 16, but the project uses Liquid Glass APIs that need the iOS 26 SDK. | The requirement says Xcode 26, matching the build that was tested. |
 
-No other pods were added.
+---
 
-## Assumptions and decisions
+## Automated Unit Testing
 
-- **Figma frame size.** The design is 393 pt wide. Margins, paddings and sizes are taken from it as-is; cards stretch with the screen and images keep the design's aspect ratio.
-- **Android status bar.** The frames include an Android status bar. Vertical offsets are measured from its bottom edge and applied below the iOS safe area.
-- **Title box.** The design gives the two-line card title a 45 pt box with 24 pt line height (48 pt of text). The label is 48 pt and the gap below is reduced by 3 pt, so every other measurement matches.
-- **Light appearance only.** The design defines no dark variant, so the app is fixed to the light appearance instead of shipping an unreviewed dark theme.
-- **Opening the full article.** The design has no control for this, but the brief requires it. A floating button reusing the design's "Read More" style was added to the detail screen.
-- **Byline.** The design shows only the article's age on the detail screen. The author or publisher is appended to that line so the `null` author case is visibly handled.
-- **Search and layout toggle.** The header icons are functional: the grid icon switches to the two-column layout from the design, and search filters the loaded list by title, description, author and source. The search field itself is not in the design.
-- **Favourites.** The heart on the detail screen toggles between the two icons in the design and is stored locally. There is no favourites list because the design has none.
-- **Body text.** The feed's `content` ends in a "[+3029 …" truncation marker followed by filler text. The marker is removed; the rest is shown unchanged.
-- **Split view assembly.** Each screen is laid out in its own storyboard. `AppRouter` assembles the split view in code so the same scenes can be injected and reused in both columns.
-- **Custom transition.** The iOS 18 zoom transition is used for the push on iPhone, aligned to the detail image. It is interruptible and provides the interactive dismissal for free.
-- **Cache pod version.** `Cache` 6.0.0 is the latest version published to CocoaPods trunk.
-- **Fonts.** Roboto, Roboto Condensed and Montserrat are bundled (Latin subset) under the Apache 2.0 and SIL Open Font licences.
+The test suite covers **128 unit tests** with 100% pass rate:
 
-## With more time
+- **`ArticleDecodingTests`** (8 tests): Fault-tolerant decoding of missing, null, empty and mistyped fields and malformed array elements.
+- **`ArticlePresentationTests`** (25 tests): Storage size formatting, limit override from launch argument, storage-limit banner wording, date parsing, link validation, display fallbacks, search filtering, section filter, the empty Saved state, `SharedArticleStore` (save/load, cycling and wrap-around, index reset when the list shrinks, per-article images and pruning, inert without a container) and deep link construction.
+- **`ArticleListViewControllerTests`** (5 tests): The real list screen built by `ViewControllerFactory`: reconnecting keeps fresh pages without a request but reloads cached, failed or empty content, and the "No results" overlay survives typing faster than its cross-fade.
+- **`ArticlesManagerTests`** (19 tests): First page caching, cache fallback on failure, next pages appended and cached, failed page retry, reload discarding later pages, offline paging from the cache, lookups ignoring paging, widget publishing, a stale next page dropped after a refresh, overlapping page-1 calls sharing one request, and the reconnect rule.
+- **`ArticlesProviderTests`** (11 tests): Page slicing, `hasMore`, snapshot reuse with simulated latency, page 1 refreshing the snapshot, boundary pages, empty feed, invalid page numbers, filtering of empty articles, invalid JSON and network errors, endpoint security.
+- **`BannerPresenterTests`** (3 tests): A pinned banner leaves on unpin, also when it was pinned while a toast was running; unpin during a toast lets the toast finish.
+- **`ConnectivityManagerTests`** (3 tests): Monitoring starts with the current state, only real online/offline transitions reach observers (Wi-Fi to cellular does not), and releasing the observation stops updates.
+- **`FavoritesManagerTests`** (26 tests): Eviction notifications (titles, oldest first, too-large reason, description fallback, none without eviction), Full model persistence, images downloaded into the app's store with their real size, image file deleted on removal and eviction, failed and late downloads, missing images fetched again on launch, sizes re-read from disk, 50 MB budget eviction, async re-enforcement, single-article-over-budget handling, concurrent thread safety, ordering, and widget publishing.
+- **`SavedImageStoreTests`** (7 tests): File written under Application Support with its real size, replace, remove, remove all, empty data rejected, unknown article has no image.
+- **`WidgetSyncManagerTests`** (21 tests): List composition (last opened, saved, latest; de-duplication; cap of 10; title fallbacks), single publish with one reload, image download de-duplication, failed downloads, coalescing of launch-time updates, no pruning or index reset on relaunch, last opened persistence and lookup for deep links, and JPEG downsampling.
 
-- UI tests and snapshot tests for both screens at several Dynamic Type sizes and on iPad
-- A favourites list, and a shared element transition for the iPad column
-- Pagination and background refresh, if the API supported them
-- Localisation (all copy is currently English and inline)
-- A dark appearance agreed with design
-- Full VoiceOver audit, including custom rotor actions on cards
-- CI running the build and tests on every push
+---
+
+## Third-Party Libraries
+
+Required by the brief and integrated via CocoaPods:
+
+- **Alamofire**: Robust networking and request management.
+- **XCGLogger**: Structured, level-based console logging.
+- **Swinject**: Pure dependency injection container.
+- **ReachabilitySwift**: Real-time network transition monitoring.
+- **Kingfisher**: Asynchronous image loading for the feed with downsampling and one retry; saved articles read their image from the app's own file instead.
+- **Cache**: Typed disk storage for the last loaded pages (`ArticlesCache`) and the saved article records (`FavoritesManager`).
+
+---
+
+## With More Time
+
+1. **Snapshot Testing**: Integrate point-free `swift-snapshot-testing` across iPhone and iPad sizes at different Dynamic Type scales.
+2. **Widget Configurable Topics**: Add a SiriKit / AppIntent configuration parameter allowing users to select their favorite news category directly in the widget edit mode.
+3. **CI/CD Automation**: GitHub Actions workflow running `xcodebuild test` and SwiftLint checks on every pull request.
