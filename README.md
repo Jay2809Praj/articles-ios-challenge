@@ -2,7 +2,7 @@
 
 An iOS / iPadOS app that lists articles from an API, displays detailed reading views, supports offline saving, pagination, and an interactive home screen widget with deep linking. Built for the Magycal iOS Technical Challenge (Part 1 & Part 2).
 
-- **UIKit + Storyboards + XIBs**, MVC, with a modern **SwiftUI** widget and state components embedded via `UIHostingController`
+- **UIKit + Storyboards + XIBs**, MVC; **SwiftUI** for the widget extension and for the full-screen state view, which the app hosts through `UIHostingController`
 - **iPhone and iPad** (`UISplitViewController` on iPad), deployment target **iOS 18.0**
 - Works **offline**, survives **broken data**, supports **Dynamic Type**, adopts **Liquid Glass**, implements a **50 MB oldest-saved-first offline budget**, **Infinite Scroll**, and an **Interactive WidgetKit Extension**
 
@@ -62,7 +62,7 @@ xcodebuild test -workspace Articles.xcworkspace -scheme Articles \
 | **Interactivity** | Zoom transition from card image to detail image, interactive dismiss, and animated layout switches. |
 | **Networking & Logging** | Alamofire with custom mapper to `NetworkError`; structured logging via `XCGLogger`. |
 | **Dependency Injection** | Swinject container in `AppDelegate`; view controllers receive injected managers. |
-| **Cache & Offline Sync** | Cache persistence for last-known articles; Reachability monitoring with automatic refresh on connection recovery. |
+| **Cache & Offline Sync** | The last loaded pages persist on disk through the Cache pod and are served, page by page, when the network fails; Reachability monitoring drives the offline banner and reloads cached, failed or empty content when the connection returns. |
 | **Data Robustness** | Lenient decoding of all fields, lossy array decoding, URL sanitisation, and error handling for malformed JSON. |
 
 ---
@@ -77,7 +77,7 @@ Users can save articles to read offline from both the list card and the detail s
   - The list and detail screens load a saved article's image from that file first (`RemoteImageView.setImage(with:localFile:)`), so no network or cache lookup is involved.
   - If a download did not finish (the app was killed, or the article was saved offline), the article stays saved without an image and the image is fetched again on the next launch.
   - Removing an article, eviction, and "clear all" delete the corresponding files.
-- **Dedicated Saved Area**: Accessible via the navigation bar bookmark icon on the home screen, presenting saved articles in a dedicated collection.
+- **Dedicated Saved Area**: The segmented control under the title switches between **All Articles** and **Saved (n)**. The Saved section lists the saved articles in the same card and grid layouts, searchable, with the storage usage line underneath; pull-to-refresh and paging apply only to the feed.
 - **50 MB Storage Budget Decision**:
   - The brief dictates that saved content is limited to **50 MB**.
   - **Eviction Strategy**: Implemented an **oldest-saved-first** eviction policy in `FavoritesManager`.
@@ -137,25 +137,39 @@ ViewControllers  →  Managers  →  ProviderProtocols  ←  Providers  →  Ala
 ```
 Articles/
 ├── Models/
-│   ├── ProviderProtocols/   ArticlesProviderProtocol, ReachabilityProviderProtocol, NetworkClientProtocol
-│   └── Entities/            Article, ArticleSource, ArticlesResponse, ArticlesPage, CachedArticles (Codable), LossyArray
+│   ├── ProviderProtocols/   ArticlesProviderProtocol (+ ArticlesPage), NetworkClientProtocol, ReachabilityProviderProtocol
+│   └── Entities/            Article (+ Identity), ArticleSource, ArticlesResponse, CachedArticles, LossyArray,
+│                            KeyedDecodingContainer+CleanString
 ├── Provider/
-│   ├── Client/              NetworkClient, NetworkError (+ mapper), NetworkEventLogger, ReachabilityProvider, Endpoint
+│   ├── Client/              NetworkClient, NetworkSessionFactory, NetworkError, NetworkErrorMapper, NetworkEventLogger,
+│   │                        ReachabilityProvider, Endpoint
 │   └── Core/                ArticlesProvider
 ├── Managers/
-│   ├── Client/              SharedArticleStore, SavedImageStore (+ protocol), Cache/ (ArticlesCache), Constants/, Utilities/
+│   ├── Client/              SharedArticleStore, SavedImageStore (+ protocol)
+│   │   ├── Cache/           ArticlesCache (+ protocol)
+│   │   ├── Constants/       AppConstants, AppColor, AppFont, AppIcon, AppMetrics
+│   │   └── Utilities/       ArticleDateFormatter, ArticleLinkValidator, ArticleSearchFilter, StorageSizeFormatter, LoggerFactory
 │   └── Core/                ArticlesManager, ConnectivityManager, FavoritesManager, WidgetSyncManager (+ protocols)
 ├── ViewControllers/
-│   ├── Client/              AppRouter, ViewControllerFactory, BannerPresenter, GlassHelper, ArticleDisplay
+│   ├── Client/              AppRouter, ArticleRouting, ViewControllerFactory, ArticleListDataSource, ArticleListLayoutFactory,
+│   │                        ArticleListHeaderView, BannerPresenter, StatusBannerView, ContentStateViewController,
+│   │                        RemoteImageView, ReadMoreButton, GlassEffect, ArticleDisplay, TextStyler, NibLoadable,
+│   │                        NetworkError+UserMessage
 │   ├── Core/                ArticleListViewController, ArticleDetailViewController
-│   └── Cells/               ArticleCardCell, ArticleGridCell
+│   └── Cells/               ArticleCardCell, ArticleGridCell, CardStyle
 ├── Views/
-│   ├── XIBs/                Cells, list header, status banner
 │   ├── Storyboards/         ArticleList, ArticleDetail
+│   ├── XIBs/                ArticleCardCell, ArticleGridCell, ArticleListHeaderView, StatusBannerView, ReadMoreButton
 │   └── SwiftUI/             ContentStateView
-├── ArticlesWidget/          ArticlesWidget, ArticlesWidgetBundle, Info.plist, ArticlesWidget.entitlements
-├── Assets.xcassets          Icons, colors, and graphics
-└── AppDelegate.swift        App entry point & Swinject container setup
+├── Assets.xcassets/         App icon, colours, icons and images
+├── Assets/Fonts/            Bundled fonts
+├── AppDelegate.swift        App entry point and Swinject container
+├── SceneDelegate.swift      Window setup and widget deep links
+└── Articles.entitlements    App Group
+
+ArticlesWidget/              ArticlesWidget (timeline provider, views, Next / Previous intents), ArticlesWidgetBundle,
+                             Info.plist, ArticlesWidget.entitlements (App Group)
+ArticlesTests/               Unit tests and Mocks
 ```
 
 ---
@@ -208,12 +222,12 @@ A critical pass over the Part 1 code before this submission. Each item names wha
 The test suite covers **128 unit tests** with 100% pass rate:
 
 - **`ArticleDecodingTests`** (8 tests): Fault-tolerant decoding of missing, null, empty and mistyped fields and malformed array elements.
-- **`ArticlePresentationTests`** (25 tests): Storage size formatting, limit override from launch argument, storage-limit banner wording, Date parsing, link validation, display fallbacks, search filtering, section filter, `SharedArticleStore` (save/load, cycling and wrap-around, index reset when the list shrinks, per-article images and pruning, inert without a container) and deep link construction.
+- **`ArticlePresentationTests`** (25 tests): Storage size formatting, limit override from launch argument, storage-limit banner wording, date parsing, link validation, display fallbacks, search filtering, section filter, the empty Saved state, `SharedArticleStore` (save/load, cycling and wrap-around, index reset when the list shrinks, per-article images and pruning, inert without a container) and deep link construction.
 - **`ArticleListViewControllerTests`** (5 tests): The real list screen built by `ViewControllerFactory`: reconnecting keeps fresh pages without a request but reloads cached, failed or empty content, and the "No results" overlay survives typing faster than its cross-fade.
 - **`ArticlesManagerTests`** (19 tests): First page caching, cache fallback on failure, next pages appended and cached, failed page retry, reload discarding later pages, offline paging from the cache, lookups ignoring paging, widget publishing, a stale next page dropped after a refresh, overlapping page-1 calls sharing one request, and the reconnect rule.
 - **`ArticlesProviderTests`** (11 tests): Page slicing, `hasMore`, snapshot reuse with simulated latency, page 1 refreshing the snapshot, boundary pages, empty feed, invalid page numbers, filtering of empty articles, invalid JSON and network errors, endpoint security.
 - **`BannerPresenterTests`** (3 tests): A pinned banner leaves on unpin, also when it was pinned while a toast was running; unpin during a toast lets the toast finish.
-- **`ConnectivityManagerTests`** (3 tests): Reachability state changes, observation unregistering, and debounce logic.
+- **`ConnectivityManagerTests`** (3 tests): Monitoring starts with the current state, only real online/offline transitions reach observers (Wi-Fi to cellular does not), and releasing the observation stops updates.
 - **`FavoritesManagerTests`** (26 tests): Eviction notifications (titles, oldest first, too-large reason, description fallback, none without eviction), Full model persistence, images downloaded into the app's store with their real size, image file deleted on removal and eviction, failed and late downloads, missing images fetched again on launch, sizes re-read from disk, 50 MB budget eviction, async re-enforcement, single-article-over-budget handling, concurrent thread safety, ordering, and widget publishing.
 - **`SavedImageStoreTests`** (7 tests): File written under Application Support with its real size, replace, remove, remove all, empty data rejected, unknown article has no image.
 - **`WidgetSyncManagerTests`** (21 tests): List composition (last opened, saved, latest; de-duplication; cap of 10; title fallbacks), single publish with one reload, image download de-duplication, failed downloads, coalescing of launch-time updates, no pruning or index reset on relaunch, last opened persistence and lookup for deep links, and JPEG downsampling.
@@ -228,8 +242,8 @@ Required by the brief and integrated via CocoaPods:
 - **XCGLogger**: Structured, level-based console logging.
 - **Swinject**: Pure dependency injection container.
 - **ReachabilitySwift**: Real-time network transition monitoring.
-- **Kingfisher**: Asynchronous image downloading, memory/disk caching, and downsampling.
-- **Cache**: Fast, typed disk and memory storage for article feeds.
+- **Kingfisher**: Asynchronous image loading for the feed with downsampling and one retry; saved articles read their image from the app's own file instead.
+- **Cache**: Typed disk storage for the last loaded pages (`ArticlesCache`) and the saved article records (`FavoritesManager`).
 
 ---
 
